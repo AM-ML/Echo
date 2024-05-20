@@ -17,6 +17,8 @@
 
 // chess board square conversion
 #define FR2SQ(f, r) (8*r + f)
+#define bitScanLSB(bb) (__builtin_ctzll(bb))
+#define bitScanMSB(bb) (__builtin_clzll(bb))
 
 struct CBoard
 {

@@ -4,8 +4,8 @@
 
 int main(void)
 {
-	unsigned long long b64 = 3; // 000...011 number of bits = 1: 2
-	printf("Pop Count of 011: %d\n", popCount(b64));
-	
+	U64  bb = (unsigned long long int) 20; // 000..10100 LSB index: 2, MSB index: 4
+	printf("LSB:%d\n", bitScanLSB(bb));
+	printf("MSB: %d\n", 63 - bitScanMSB(bb));
 	return 0;
 }
