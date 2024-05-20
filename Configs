@@ -1,0 +1,10 @@
+Board Representation:
+	Squares & pieces: ->  BitBoards.
+
+	BitBoards for:
+		All Pieces (board), Side-specific Pieces (white and black), Queens (w & b), Rooks (w & b),
+		Bishops (w & b), Knights (w & b), Pawns (w & b).
+
+	Total: - 13 BitBoards. 
+		  - 832 bits to represent 1 position.
+		

@@ -1,0 +1,27 @@
+#define File_LTBEnd(l_end) (l_end ^ 7)  // file little to big endian mapping conversion
+#define File_BTLEnd(b_end) (b_end ^ 7)  // file big to little endian mapping conversion
+#define Rank_LTBEnd(l_end) (l_end ^ 56) // rank little to big endian mapping conversion
+#define Rank_BTLEnd(b_end) (b_end ^ 56) // rank big to little endian mapping conversion
+
+// diagonal bit shifting movements
+#define UpLeft(index) (index+7)
+#define UpRight(index) (index+9)
+#define DownRight(index) (index-7)
+#define DownLeft(index) (index-9)
+
+// orthognal bit shifting movements
+#define Up(index) (index+8)
+#define Right(index) (index+1)
+#define Left(index) (index-1)
+#define Down(index) (index-8)
+
+
+struct CBoard
+{
+	// Pieces BitBoard
+	U64 wPawns, wKnights, wBishops, wRooks, wQueens, wKing,
+		bPawns, bKnights, bBishops, bRooks, bQueens, bKing;
+
+	U64 Pieces; // combines all pieces bitboards, wPawns | wKnights | ...
+
+}
