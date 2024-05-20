@@ -11,11 +11,14 @@ enum { // RANK FILE ENDIAN mapping
 	A8, B8, C8, D8, E8, F8, G8, H8
 };
 
+enum { FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H };
+enum { RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8 };
+
 // hexadecimal constants that select certain bits on the BitBoard
-#define A_FILE             	0x0101010101010101
-#define H_FILE             	0x8080808080808080
-#define RANK_1           	0x00000000000000FF 
-#define RANK_8             	0xFF00000000000000
+// #define A_FILE             	0x0101010101010101
+// #define H_FILE             	0x8080808080808080
+// #define RANK_1           	0x00000000000000FF 
+// #define RANK_8             	0xFF00000000000000
 #define A1_DIAGONAL        	0x8040201008040201
 #define H1_DIAGONAL  	   	0x0102040810204080
 #define LIGHT_SQUARES      	0x55AA55AA55AA55AA

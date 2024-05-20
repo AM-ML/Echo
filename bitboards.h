@@ -15,6 +15,8 @@
 #define Left(index) (index-1)
 #define Down(index) (index-8)
 
+// chess board square conversion
+#define FR2SQ(f, r) (8*r + f)
 
 struct CBoard
 {
@@ -24,4 +26,8 @@ struct CBoard
 
 	U64 Pieces; // combines all pieces bitboards, wPawns | wKnights | ...
 
-}
+};
+
+// functions
+void addPiece(U64 *bb, int square);
+void PrintBitBoard(U64 bb);
