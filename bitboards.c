@@ -15,8 +15,6 @@ void removePiece(U64 *bb, int index)
 
 void Shift_UR(U64 *bb, int index, int times)
 {
-	// removePiece(bb, index);
-	// addPiece(bb, index+(9*times));
 	U64 weight = (1ULL << index+times*9) - (1ULL << index);
 	*bb += weight;
 

@@ -32,6 +32,8 @@ struct CBoard
 void addPiece(U64 *bb, int square);
 void removePiece(U64 *bb, int index);
 
+
+// piece shifters / movers (potential to precalculate the output based on input)
 void Shift_U(U64 *bb, int index, int times);
 void Shift_L(U64 *bb, int index, int times);
 void Shift_D(U64 *bb, int index, int times);

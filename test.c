@@ -4,13 +4,8 @@
 
 int main(void)
 {
-	U64 bb = 0ULL;
-
-	addPiece(&bb, A2);
-	addPiece(&bb, G2);
-	addPiece(&bb, E4);
-
-	PrintBitBoard(bb);
-
+	unsigned long long b64 = 3; // 000...011 number of bits = 1: 2
+	printf("Pop Count of 011: %d\n", popCount(b64));
+	
 	return 0;
 }

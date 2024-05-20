@@ -23,3 +23,5 @@ enum { RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8 };
 #define H1_DIAGONAL  	   	0x0102040810204080
 #define LIGHT_SQUARES      	0x55AA55AA55AA55AA
 #define DARK_SQUARES       	0xAA55AA55AA55AA55
+
+#define popCount(b64) (__builtin_popcountll(b64))
