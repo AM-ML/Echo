@@ -7,6 +7,63 @@ void addPiece(U64 *bb, int square)
 	*bb |= 1ULL << square;
 }
 
+void removePiece(U64 *bb, int index)
+{
+	U64 shifted = 1ULL << index;
+	*bb -= shifted;
+}
+
+void Shift_UR(U64 *bb, int index, int times)
+{
+	// removePiece(bb, index);
+	// addPiece(bb, index+(9*times));
+	U64 weight = (1ULL << index+times*9) - (1ULL << index);
+	*bb += weight;
+
+}
+
+void Shift_UL(U64 *bb, int index, int times)
+{
+	U64 weight = (1ULL << index+times*7) - (1ULL << index);
+	*bb += weight;
+}
+
+void Shift_DR(U64 *bb, int index, int times)
+{
+	U64 weight = (1ULL << index+times*(-7)) -  (1ULL << index);
+	*bb += weight;
+}
+
+void Shift_DL(U64 *bb, int index, int times)
+{
+	U64 weight = (1ULL << index+times*(-9)) - (1ULL << index);
+	*bb += weight;
+}
+
+void Shift_U(U64 *bb, int index, int times)
+{
+	U64 weight = (1ULL << index+times*8) - (1ULL << index);
+	*bb += weight;
+}
+
+void Shift_L(U64 *bb, int index, int times)
+{
+	U64 weight = (1ULL << index+times*(-1)) - (1ULL << index);
+	*bb += weight;
+}
+void Shift_D(U64 *bb, int index, int times)
+{
+	U64 weight = (1ULL << index+times*(-8)) - (1ULL << index);
+	*bb += weight;
+}
+
+void Shift_R(U64 *bb, int index, int times)
+{
+	U64 weight = (1ULL << index+times*1) - (1ULL << index);
+	*bb += weight;
+}
+
+
 void PrintBitBoard(U64 bb) {
     U64 shiftMe = 1ULL;
 

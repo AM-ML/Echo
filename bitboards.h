@@ -30,4 +30,16 @@ struct CBoard
 
 // functions
 void addPiece(U64 *bb, int square);
+void removePiece(U64 *bb, int index);
+
+void Shift_U(U64 *bb, int index, int times);
+void Shift_L(U64 *bb, int index, int times);
+void Shift_D(U64 *bb, int index, int times);
+void Shift_R(U64 *bb, int index, int times);
+
+void Shift_UR(U64 *bb, int index, int times);
+void Shift_UL(U64 *bb, int index, int times);
+void Shift_DR(U64 *bb, int index, int times);
+void Shift_DL(U64 *bb, int index, int times);
+
 void PrintBitBoard(U64 bb);
