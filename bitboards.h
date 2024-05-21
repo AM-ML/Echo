@@ -1,7 +1,7 @@
-#define File_LTBEnd(l_end) (l_end ^ 7)  // file little to big endian mapping conversion
-#define File_BTLEnd(b_end) (b_end ^ 7)  // file big to little endian mapping conversion
-#define Rank_LTBEnd(l_end) (l_end ^ 56) // rank little to big endian mapping conversion
-#define Rank_BTLEnd(b_end) (b_end ^ 56) // rank big to little endian mapping conversion
+#define File_LTBEnd(l_end) (l_end ^ 7)  // file-rank little to big endian mapping conversion
+#define File_BTLEnd(b_end) (b_end ^ 7)  // file-rank big to little endian mapping conversion
+#define Rank_LTBEnd(l_end) (l_end ^ 56) // rank-file little to big endian mapping conversion
+#define Rank_BTLEnd(b_end) (b_end ^ 56) // rank-file big to little endian mapping conversion
 
 // diagonal bit shifting movements
 #define UpLeft(index) (index+7)
@@ -33,6 +33,9 @@ struct CBoard
 // functions
 void addPiece(U64 *bb, int square);
 void removePiece(U64 *bb, int index);
+
+// board twisters
+U64 flipVertical(U64 x);
 
 
 // piece shifters / movers (potential to precalculate the output based on input)

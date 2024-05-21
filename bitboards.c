@@ -2,6 +2,29 @@
 #include "defs.h"
 #include "bitboards.h"
 
+U64 flipVertical(U64 x) {
+/*
+			     			   RANK -> 12345678...87654321
+			 RANK 1 -> 8, shift  56=7, 12345678 = 1_______ & RANK_8
+			 RANK 2 -> 7, shift  40=5, 12345678 = 321_____ & RANK_7
+			 RANK 3 -> 6, shift  24=3, 12345678 = 54321___ & RANK_6
+			 RANK 4 -> 5, shift   8=1, 12345678 = 7654321_ & RANK_5
+			 RANK 5 -> 4, shift  -8=1, 12345678 = _8765432 & RANK_4
+			 RANK 6 -> 3, shift -24=3, 12345678 = ___87654 & RANK_3
+			 RANK 7 -> 2, shift -40=5, 12345678 = _____876 & RANK_2
+			 RANK 8 -> 1, shift -56=7, 12345678 = _______8 & RANK_1
+*/
+
+    return  ( (x << 56) ) |
+            ( (x << 40) & 0x00ff000000000000 ) |
+            ( (x << 24) & 0x0000ff0000000000 ) |
+            ( (x <<  8) & 0x000000ff00000000 ) |
+            ( (x >>  8) & 0x00000000ff000000 ) |
+            ( (x >> 24) & 0x0000000000ff0000 ) |
+            ( (x >> 40) & 0x000000000000ff00 ) |
+            ( (x >> 56) );
+}
+
 void addPiece(U64 *bb, int square)
 {
 	*bb |= 1ULL << square;
