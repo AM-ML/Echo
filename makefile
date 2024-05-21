@@ -11,7 +11,7 @@ g2:
 	clear;git commit -m "#${a}"; git push; git log --oneline
 
 gbb:
-	clear; ga bitboard.c bitboard.h;gc -m "#${a}"; gp; glo
+	clear; git add bitboards.c bitboards.h;git commit -m "#${a}"; git push; git log --oneline
 
 gt:
 	clear; git add test.c; git commit -m "#${a}"; git push; git log --oneline
