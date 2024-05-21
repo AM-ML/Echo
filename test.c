@@ -4,32 +4,32 @@
 #include <byteswap.h>
 #include <time.h>
 
-int main(void)
-{
-	clock_t start, start1, end, end1;
-    double cpu_time_used, cpu_time_used1;
+#define NUM_ITERATIONS 1000000
 
-	U64 bb = HEX_DIAGONAL_A1; // A1 DIAGONAL
+int main(void) {
+    clock_t start, end;
+    double cpu_time_used = 0, cpu_time_used1 = 0;
 
-	start = clock();
+    U64 bb = HEX_DIAGONAL_A1; // A1 DIAGONAL
 
-	U64 bb_flipped = bswap_64(bb); // v_flipped A1 DIAGONAL -> A8 DIAGONAL
+    // Measure built-in bswap
+    start = clock();
+    for (int i = 0; i < NUM_ITERATIONS; i++) {
+        volatile U64 bb_flipped = bswap_64(bb); // Prevent compiler optimization
+    }
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000 / NUM_ITERATIONS;
 
-	end = clock();
+    // Measure custom flipVertical
+    start = clock();
+    for (int i = 0; i < NUM_ITERATIONS; i++) {
+        volatile U64 bb2_flipped = flipVertical(bb); // Prevent compiler optimization
+    }
+    end = clock();
+    cpu_time_used1 = ((double) (end - start)) / CLOCKS_PER_SEC * 1000 / NUM_ITERATIONS;
 
-	start1 = clock();
+    printf("\033[1;96mbuilt in bswap: \033[1;93m%lf\033[1;91m ms\n", cpu_time_used);
+    printf("\033[1;96mcustom bswap:   \033[1;93m%lf\033[1;91m ms\n", cpu_time_used1);
 
-	U64 bb2_flipped = flipVertical(bb);
-
-	end1 = clock();
-
-	cpu_time_used  = ((double) ( end -  start)) / CLOCKS_PER_SEC * 1000;
-	cpu_time_used1 = ((double) (end1 - start1)) / CLOCKS_PER_SEC * 1000;
-
-	printf("\033[1;96mbuilt in bswap: \033[1;93m%lf\033[1;91mau\n", cpu_time_used);
-	printf("\033[1;96mcustom bswap:   \033[1;93m%lf\033[1;91mau\n", cpu_time_used);
-	// PrintBitBoard(bb);
-	// PrintBitBoard(bb_flipped);
-
-	return 0;
+    return 0;
 }
