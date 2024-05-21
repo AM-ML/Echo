@@ -7,5 +7,8 @@ t:
 git:
 	clear;git add --all; git commit -am "#${a}"; git push;git log --oneline
 
+g2:
+	clear;git commit -m "#${a}"; git push; git log --oneline
+
 log:
 	clear;git log --oneline
