@@ -1,7 +1,7 @@
 all:
 	clear;gcc echo.c bitboards.c  -o echo;./echo
 
-test:
+t:
 	clear;gcc test.c bitboards.c -o ftest;./ftest
 
 git:
