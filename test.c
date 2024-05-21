@@ -4,8 +4,10 @@
 
 int main(void)
 {
-	U64  bb = (unsigned long long int) 20; // 000..10100 LSB index: 2, MSB index: 4
-	printf("LSB:%d\n", bitScanLSB(bb));
-	printf("MSB: %d\n", 63 - bitScanMSB(bb));
+	U64 bb = HEX_DIAGONAL_A1; // A1 DIAGONAL
+	U64 bb_flipped = flipVertical(bb); // v_flipped A1 DIAGONAL -> A8 DIAGONAL
+	PrintBitBoard(bb);
+	PrintBitBoard(bb_flipped);
+
 	return 0;
 }
