@@ -12,3 +12,6 @@ g2:
 
 log:
 	clear;git log --oneline
+
+gc:
+	clear; gc ; git log
