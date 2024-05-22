@@ -39,7 +39,7 @@ void addPiece(U64 *bb, int square);
 void removePiece(U64 *bb, int index);
 
 // board twisters
-U64 flipVertical(U64 x) (bswap_64(x));
+#define flipVertical(x) (bswap_64(x));
 
 
 // piece shifters / movers (potential to precalculate the output based on input)

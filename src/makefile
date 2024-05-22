@@ -1,8 +1,8 @@
 all:
-	clear;gcc echo.c bitboards.c  -o echo;./echo
+	clear;gcc echo.c bitboards.c  -o ../bin/echo;../bin/echo
 
 t:
-	clear;gcc test.c bitboards.c -o ftest;./ftest
+	clear;gcc test.c bitboards.c -o ../bin/test;../bin/test
 
 git:
 	clear;git add --all; git commit -am "#${a}"; git push;git log --oneline
