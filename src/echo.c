@@ -1,25 +1,17 @@
-#include <stdio.h>
 #include "defs.h"
 #include "bitboards.h"
 
 int main(void)
 {
-	U64 bb = 0ULL;
+  Board board; initBoard(&board);
+  addPiece(&board.wPawns, A2);
+  addPiece(&board.bKnights, G8);
 
-	addPiece(&bb, A2);
+  Shift_U(&board.wPawns, A2, 1);
 
-	printf("\033[1;91mPiece on: \033[1;93mA2, A6\n");
-
-	addPiece(&bb, A6);
-	PrintBitBoard(bb);
-
-	printf("\033[1;91mA2 \033[1;93mTo \033[1;91mE6\n"); //E6
-	Shift_UR(&bb, A2, 4);
-
-	PrintBitBoard(bb);
-
-	printf("\033[1;91mNumber of Pieces: \033[1;93m%d\n\n", popCount(bb));
-
+  U64 position = getPos(&board);
+  PrintBitBoard(position);
+  PrintBitBoard(flipHorizontal(position));
 
 	return 0;
 }
