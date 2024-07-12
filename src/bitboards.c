@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include "defs.h"
 #include "bitboards.h"
 
 void addPiece(U64 *bb, int square)
@@ -15,49 +13,49 @@ void removePiece(U64 *bb, int index)
 
 void Shift_UR(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*9) - (1ULL << index);
+	U64 weight = (1ULL << (index+times*9)) - (1ULL << index);
 	*bb += weight;
 
 }
 
 void Shift_UL(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*7) - (1ULL << index);
+	U64 weight = (1ULL << (index+times*7)) - (1ULL << index);
 	*bb += weight;
 }
 
 void Shift_DR(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*(-7)) -  (1ULL << index);
+	U64 weight = (1ULL << (index+times*(-7))) -  (1ULL << index);
 	*bb += weight;
 }
 
 void Shift_DL(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*(-9)) - (1ULL << index);
+	U64 weight = (1ULL << (index+times*(-9))) - (1ULL << index);
 	*bb += weight;
 }
 
 void Shift_U(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*8) - (1ULL << index);
+	U64 weight = (1ULL << (index+times*8)) - (1ULL << index);
 	*bb += weight;
 }
 
 void Shift_L(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*(-1)) - (1ULL << index);
+	U64 weight = (1ULL << (index+times*(-1))) - (1ULL << index);
 	*bb += weight;
 }
 void Shift_D(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*(-8)) - (1ULL << index);
+	U64 weight = (1ULL << (index+times*(-8))) - (1ULL << index);
 	*bb += weight;
 }
 
 void Shift_R(U64 *bb, int index, int times)
 {
-	U64 weight = (1ULL << index+times*1) - (1ULL << index);
+	U64 weight = (1ULL << (index+times*1)) - (1ULL << index);
 	*bb += weight;
 }
 
@@ -87,3 +85,38 @@ void PrintBitBoard(U64 bb) {
     }
     printf("\033[1;96m  A B C D E F G H\033[0;0m\n\n"); // Printing file labels
 }
+
+void initBoard(Board *board)
+{
+	board->wPawns = 0ULL;
+	board->wKnights = 0ULL;
+	board->wKing = 0ULL;
+	board->wBishops = 0ULL;
+	board->wRooks = 0ULL;
+	board->wQueens = 0ULL;
+
+	board->bPawns = 0ULL;
+	board->bKnights = 0ULL;
+	board->bKing = 0ULL;
+	board->bBishops = 0ULL;
+	board->bRooks = 0ULL;
+	board->bQueens = 0ULL;
+}
+
+U64 getPos(Board *board)
+{
+	return board->wPawns | board->wKnights | board->wBishops | board->wRooks | board->wQueens | board->wKing |
+           board->bPawns | board->bKnights | board->bBishops | board->bRooks | board->bQueens | board->bKing;
+
+}
+
+U64 flipHorizontal (U64 x) { // mirrors bits horizontally
+   const U64 k1 = 0x5555555555555555;
+   const U64 k2 = 0x3333333333333333;
+   const U64 k4 = 0x0f0f0f0f0f0f0f0f;
+   x = ((x >> 1) & k1) | ((x & k1) << 1);
+   x = ((x >> 2) & k2) | ((x & k2) << 2);
+   x = ((x >> 4) & k4) | ((x & k4) << 4);
+   return x;
+}
+
