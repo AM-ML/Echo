@@ -1,3 +1,6 @@
+#ifndef _DEFS_HHH__
+#define _DEFS_HHH__
+
 typedef unsigned long long U64;
 
 enum { // RANK-FILE LITTLE ENDIAN mapping
@@ -17,7 +20,7 @@ enum { RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8 };
 // hexadecimal constants that select certain bits on the BitBoard
 #define HEX_FILE_A             	0x0101010101010101
 #define HEX_FILE_H             	0x8080808080808080
-#define HEX_RANK_1           	0x00000000000000FF 
+#define HEX_RANK_1           	0x00000000000000FF
 #define HEX_RANK_8             	0xFF00000000000000
 #define HEX_DIAGONAL_A1        	0x8040201008040201
 #define HEX_DIAGONAL_H1  	   	0x0102040810204080
@@ -25,3 +28,5 @@ enum { RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8 };
 #define HEX_DARK_SQUARES       	0xAA55AA55AA55AA55
 
 #define popCount(b64) (__builtin_popcountll(b64))
+
+#endif
