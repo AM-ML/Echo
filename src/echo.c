@@ -142,9 +142,14 @@ U64 mask_king_attacks(int square) {
   U64 bitboard = 0ULL;
   set_bit(bitboard, square);
 
-  if((bitboard << 8) & not_rank_1) attacks |= bitboard << 8;
+  if((bitboard << 8)) attacks |= bitboard << 8;
+  if((bitboard << 9) & not_A_file) attacks |= bitboard << 9;
+  if((bitboard << 7) & not_H_file) attacks |= bitboard << 7;
   if((bitboard << 1) & not_A_file) attacks |= bitboard << 1;
-  if((bitboard >> 8) & not_rank_8) attacks |= bitboard >> 8;
+
+  if((bitboard >> 8)) attacks |= bitboard >> 8;
+  if((bitboard >> 9) & not_H_file) attacks |= bitboard >> 9;
+  if((bitboard >> 7) & not_A_file) attacks |= bitboard >> 7;
   if((bitboard >> 1) & not_H_file) attacks |= bitboard >> 1;
 
   return attacks;
