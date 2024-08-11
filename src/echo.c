@@ -57,6 +57,8 @@ const U64 not_HG_file = 4557430888798830399ULL;
 const U64 not_AB_file = 18229723555195321596ULL;
 const U64 not_B_file = 18302063728033398269ULL;
 const U64 not_G_file = 13816973012072644543ULL;
+const U64 not_rank_1 = 72057594037927935ULL;
+const U64 not_rank_8 = 18446744073709551360ULL;
 
 // set/get/pop macros
 #define get_bit(bitboard, square) (bitboard & (1ULL << square))
@@ -117,15 +119,33 @@ U64 mask_knight_attacks(int square) {
   U64 bitboard = 0ULL;
   set_bit(bitboard, square);
 
-  if(bitboard << 6 & not_H_file & not_G_file) attacks |= bitboard << 6;
-  if(bitboard << 10 & not_A_file & not_B_file) attacks |= bitboard << 10;
+  if(bitboard << 6 & not_HG_file) attacks |= bitboard << 6;
+  if(bitboard << 10 & not_AB_file) attacks |= bitboard << 10;
   if(bitboard << 15 & not_H_file) attacks |= bitboard << 15;
   if(bitboard << 17 & not_A_file) attacks |= bitboard << 17;
 
-  if(bitboard >> 6 & not_A_file & not_B_file) attacks |= bitboard >> 6;
-  if(bitboard >> 10 & not_H_file & not_G_file) attacks |= bitboard >> 10;
+  if(bitboard >> 6 & not_AB_file) attacks |= bitboard >> 6;
+  if(bitboard >> 10 & not_HG_file) attacks |= bitboard >> 10;
   if(bitboard >> 15 & not_A_file) attacks |= bitboard >> 15;
   if(bitboard >> 17 & not_H_file) attacks |= bitboard >> 17;
+
+  return attacks;
+}
+
+
+/*** King ***/
+U64 king_attacks[64];
+
+U64 mask_king_attacks(int square) {
+  U64 attacks = 0ULL;
+
+  U64 bitboard = 0ULL;
+  set_bit(bitboard, square);
+
+  if((bitboard << 8) & not_rank_1) attacks |= bitboard << 8;
+  if((bitboard << 1) & not_A_file) attacks |= bitboard << 1;
+  if((bitboard >> 8) & not_rank_8) attacks |= bitboard >> 8;
+  if((bitboard >> 1) & not_H_file) attacks |= bitboard >> 1;
 
   return attacks;
 }
@@ -135,6 +155,7 @@ void init_leaper_attacks() {
     pawn_attacks[white][square] = mask_pawn_attacks(white, square);
     pawn_attacks[black][square] = mask_pawn_attacks(black, square);
     knight_attacks[square] = mask_knight_attacks(square);
+    king_attacks[square] = mask_king_attacks(square);
   }
 }
 
@@ -144,8 +165,8 @@ void init_leaper_attacks() {
 int main(void) {
   init_leaper_attacks();
 
-  for(int s = 0; s < 64; s++) {
-    print_bitboard(knight_attacks[s]);
+  for(int s = 0; s < 64; s++){
+    print_bitboard(king_attacks[s]);
   }
 
   return 0;
