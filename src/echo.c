@@ -98,6 +98,8 @@ U64 mask_pawn_attacks(int square, int side) {
   }
   // black side
   else {
+    if((bitboard << 7) & not_H_file) attacks |= bitboard << 7;
+    if((bitboard << 9) & not_A_file) attacks |= bitboard << 9;
   }
 
 
@@ -108,7 +110,7 @@ U64 mask_pawn_attacks(int square, int side) {
 /***** MAIN FUNCTION *****/
 
 int main(void) {
-  print_bitboard(mask_pawn_attacks(h4, white));
+  print_bitboard(mask_pawn_attacks(a5, black));
 
   return 0;
 }
