@@ -7,6 +7,9 @@
 #define RF_2SQ(r, f) (r * 8 + f)
 
 
+
+
+
 // Big Endian File-Rank Mapping
 enum {
   a8, b8, c8, d8, e8, f8, g8, h8,
@@ -19,21 +22,101 @@ enum {
   a1, b1, c1, d1, e1, f1, g1, h1
 };
 
+enum { white, black };
+
+
+/***** Constants *****/
+/****************
+* 0 1 1 1 1 1 1 1
+* 0 1 1 1 1 1 1 1
+* 0 1 1 1 1 1 1 1
+* 0 1 1 1 1 1 1 1
+* 0 1 1 1 1 1 1 1
+* 0 1 1 1 1 1 1 1
+* 0 1 1 1 1 1 1 1
+* 0 1 1 1 1 1 1 1
+* _______________
+* A B C D E F G H
+*****************/
+const U64 not_A_file = 18374403900871474942ULL;
+
+/*
+* 1 1 1 1 1 1 1 0
+* 1 1 1 1 1 1 1 0
+* 1 1 1 1 1 1 1 0
+* 1 1 1 1 1 1 1 0
+* 1 1 1 1 1 1 1 0
+* 1 1 1 1 1 1 1 0
+* 1 1 1 1 1 1 1 0
+* 1 1 1 1 1 1 1 0
+  _______________
+  A B C D E F G H
+ * */
+const U64 not_H_file = 9187201950435737471ULL;
+const U64 not_HG_file = 4557430888798830399ULL;
+const U64 not_AB_file = 18229723555195321596ULL;
+const U64 not_B_file = 18302063728033398269ULL;
+const U64 not_G_file = 13816973012072644543ULL;
+
 // set/get/pop macros
 #define get_bit(bitboard, square) (bitboard & (1ULL << square))
 #define set_bit(bitboard, square) (bitboard |= 1ULL << square)
 #define pop_bit(bitboard, square) (get_bit(bitboard, square)? (bitboard -= 1ULL << square): 0)
 
+
+
 // prototypes
 void print_bitboard(U64 bitboard);
 
-int main(void) {
-  U64 bitboard = 0ULL;
 
-  print_bitboard(bitboard);
+
+
+
+/**** Attacks ****/
+
+
+/*** Pawns ***/
+
+// pawn attacks table:: [sides][squares]
+U64 pawn_attacks[2][64];
+
+// pawn attacks generator function
+U64 mask_pawn_attacks(int square, int side) {
+  U64 attacks = 0ULL; // attacks bitboard
+
+
+  U64 bitboard= 0ULL; // piece bitboard
+  set_bit(bitboard, square); // set piece on bitboard
+
+
+  // white side
+  if(!side) {
+    // if the right pawn attack square is not on A file (not possible)
+    if((bitboard >> 7) & not_A_file) attacks |= bitboard >> 7;
+    // if the left pawn attack square is not on H file (not possible)
+    if((bitboard >> 9) & not_H_file) attacks |= bitboard >> 9;
+  }
+  // black side
+  else {
+  }
+
+
+  return attacks;
+}
+
+
+/***** MAIN FUNCTION *****/
+
+int main(void) {
+  print_bitboard(mask_pawn_attacks(h4, white));
 
   return 0;
 }
+
+
+
+
+
 
 // print bitboard
 void print_bitboard(U64 bitboard) {
@@ -62,3 +145,4 @@ void print_bitboard(U64 bitboard) {
   printf("    \033[1;93m_______________\n");
   printf("    A B C D E F G H\033[0;0m\n"); // for navigation
 }
+
