@@ -81,7 +81,7 @@ void print_bitboard(U64 bitboard);
 U64 pawn_attacks[2][64];
 
 // pawn attacks generator function
-U64 mask_pawn_attacks(int square, int side) {
+U64 mask_pawn_attacks(int side, int square) {
   U64 attacks = 0ULL; // attacks bitboard
 
 
@@ -106,11 +106,22 @@ U64 mask_pawn_attacks(int square, int side) {
   return attacks;
 }
 
+void init_leaper_attacks() {
+  for(int square = 0; square < 64; square++) {
+    pawn_attacks[white][square] = mask_pawn_attacks(white, square);
+    pawn_attacks[black][square] = mask_pawn_attacks(black, square);
+  }
+}
+
 
 /***** MAIN FUNCTION *****/
 
 int main(void) {
-  print_bitboard(mask_pawn_attacks(a5, black));
+  init_leaper_attacks();
+
+  for(int square = 0; square < 64; square ++) {
+    print_bitboard(pawn_attacks[black][square]);
+  }
 
   return 0;
 }
