@@ -242,6 +242,44 @@ U64 mask_rook_attacks(int square) {
   return attacks;
 }
 
+U64 relevant_rook_attacks(int square, U64 block) {
+  U64 attacks = 0ULL;
+
+  U64 bitboard = 0ULL;
+  set_bit(bitboard, square);
+
+  // init rank, file
+  int r, f;
+
+  // init target rank, file
+  int tr, tf;
+  tr = square / 8;
+  tf = square % 8;
+
+  for (r = tr+1; r <= 7; r++) {
+    attacks |= (1ULL << (RF_2SQ(r, tf)));
+    if ((1ULL << (RF_2SQ(r, tf))) & block) break;
+  }
+
+  for (r = tr-1; r >= 0; r--) {
+    attacks |= (1ULL << (RF_2SQ(r, tf)));
+    if ((1ULL << (RF_2SQ(r, tf))) & block) break;
+  }
+
+  for (f = tf+1; f <= 7; f++) {
+    attacks |= (1ULL << (RF_2SQ(tr, f)));
+    if ((1ULL << (RF_2SQ(tr, f))) & block) break;
+  }
+
+  for (f = tf-1; f >= 0; f--) {
+    attacks |= (1ULL << (RF_2SQ(tr, f)));
+    if ((1ULL << (RF_2SQ(tr, f))) & block) break;
+  }
+
+
+  return attacks;
+}
+
 void init_leaper_attacks() {
   for(int square = 0; square < 64; square++) {
     pawn_attacks[white][square] = mask_pawn_attacks(white, square);
@@ -260,14 +298,12 @@ int main(void) {
   init_leaper_attacks();
 
   U64 blocks = 0ULL;
-  set_bit(blocks, b7);
-  set_bit(blocks, g6);
-  set_bit(blocks, d3);
-  set_bit(blocks, h1);
-  set_bit(blocks, e4);
+  set_bit(blocks, c7);
+  set_bit(blocks, f7);
+  set_bit(blocks, f3);
 
   print_bitboard(blocks);
-  print_bitboard(relevant_bishop_attacks(e4, blocks));
+  print_bitboard(relevant_rook_attacks(f7, blocks));
 
   return 0;
 }
