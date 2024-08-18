@@ -183,6 +183,45 @@ U64 mask_bishop_attacks(int square) {
   return attacks;
 }
 
+U64 relevant_bishop_attacks(int square, U64 block) {
+  U64 attacks = 0ULL;
+
+  U64 bitboard = 0ULL;
+  set_bit(bitboard, square);
+
+  // init rank, file
+  int r, f;
+
+  // init target rank, file
+  int tr, tf;
+  tr = square / 8;
+  tf = square % 8;
+
+  // mask relevant bishop occupancy bits + board edge
+  for(r = tr + 1, f = tf + 1; r <= 7 && f <= 7; r++, f++) {
+    attacks |= (1ULL << (RF_2SQ(r, f))); // add attack square
+    if ((1ULL << (RF_2SQ(r, f))) & block) break; // then break, indicate piece can be captured
+  }
+
+  for(r = tr - 1, f = tf - 1; r >= 0 && f >= 0; r--, f--) {
+    attacks |= (1ULL << (RF_2SQ(r, f)));
+    if ((1ULL << (RF_2SQ(r, f))) & block) break;
+  }
+
+  for(r = tr + 1, f = tf - 1; r <= 7 && f >= 0; r++, f--) {
+    attacks |= (1ULL << (RF_2SQ(r, f)));
+    if ((1ULL << (RF_2SQ(r, f))) & block) break;
+  }
+
+  for(r = tr - 1, f = tf + 1; r >= 0 && f <= 7; r--, f++) {
+    attacks |= (1ULL << (RF_2SQ(r, f)));
+    if ((1ULL << (RF_2SQ(r, f))) & block) break;
+  }
+
+  return attacks;
+}
+
+
 /**** rook ****/
 U64 rook_attacks[64];
 
@@ -220,9 +259,15 @@ void init_leaper_attacks() {
 int main(void) {
   init_leaper_attacks();
 
-  for (int square = 0; square < 64; square++) {
-    print_bitboard(rook_attacks[square]);
-  }
+  U64 blocks = 0ULL;
+  set_bit(blocks, b7);
+  set_bit(blocks, g6);
+  set_bit(blocks, d3);
+  set_bit(blocks, h1);
+  set_bit(blocks, e4);
+
+  print_bitboard(blocks);
+  print_bitboard(relevant_bishop_attacks(e4, blocks));
 
   return 0;
 }
