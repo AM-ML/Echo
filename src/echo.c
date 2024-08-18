@@ -155,12 +155,41 @@ U64 mask_king_attacks(int square) {
   return attacks;
 }
 
+
+/**** bishop ****/
+
+U64 bishop_attacks[64];
+
+U64 mask_bishop_attacks(int square) {
+  U64 attacks = 0ULL;
+
+  U64 bitboard = 0ULL;
+  set_bit(bitboard, square);
+
+  // init rank, file
+  int r, f;
+
+  // init target rank, file
+  int tr, tf;
+  tr = square / 8;
+  tf = square % 8;
+
+  // mask relevant bishop occupancy bits
+  for(r = tr + 1, f = tf + 1; r < 7 && f < 7; r++, f++) attacks |= (1ULL << (RF_2SQ(r, f)));
+  for(r = tr - 1, f = tf - 1; r > 0 && f > 0; r--, f--) attacks |= (1ULL << (RF_2SQ(r, f)));
+  for(r = tr + 1, f = tf - 1; r < 7 && f > 0; r++, f--) attacks |= (1ULL << (RF_2SQ(r, f)));
+  for(r = tr - 1, f = tf + 1; r > 0 && f < 7; r--, f++) attacks |= (1ULL << (RF_2SQ(r, f)));
+
+  return attacks;
+}
+
 void init_leaper_attacks() {
   for(int square = 0; square < 64; square++) {
     pawn_attacks[white][square] = mask_pawn_attacks(white, square);
     pawn_attacks[black][square] = mask_pawn_attacks(black, square);
     knight_attacks[square] = mask_knight_attacks(square);
     king_attacks[square] = mask_king_attacks(square);
+    bishop_attacks[square] = mask_bishop_attacks(square);
   }
 }
 
@@ -170,8 +199,8 @@ void init_leaper_attacks() {
 int main(void) {
   init_leaper_attacks();
 
-  for(int s = 0; s < 64; s++){
-    print_bitboard(king_attacks[s]);
+  for (int square = 0; square < 64; square++) {
+    print_bitboard(bishop_attacks[square]);
   }
 
   return 0;
