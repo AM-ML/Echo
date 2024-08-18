@@ -64,7 +64,10 @@ const U64 not_rank_8 = 18446744073709551360ULL;
 #define get_bit(bitboard, square) (bitboard & (1ULL << square))
 #define set_bit(bitboard, square) (bitboard |= 1ULL << square)
 #define pop_bit(bitboard, square) (get_bit(bitboard, square)? (bitboard -= 1ULL << square): 0)
-
+#define count_bits(bitboard) (__builtin_popcountll(bitboard))
+#define get_lsb(bitboard) ((bitboard) & -(bitboard))
+#define get_tz(bitboard) (((bitboard) & -(bitboard)) - 1)
+#define get_lsb_index(bitboard) ((bitboard)? count_bits(get_tz(bitboard)) : -1)
 
 
 // prototypes
@@ -303,7 +306,11 @@ int main(void) {
   set_bit(blocks, f3);
 
   print_bitboard(blocks);
-  print_bitboard(relevant_rook_attacks(f7, blocks));
+  print_bitboard(get_lsb(blocks));
+  print_bitboard(get_tz(blocks));
+  printf("pieces: %d\n", count_bits(blocks));
+  printf("lsb index: %d\n", get_lsb_index(blocks));
+
 
   return 0;
 }
