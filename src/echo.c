@@ -307,31 +307,25 @@ void init_leaper_attacks() {
 }
 
 
-/***** MAIN FUNCTION *****/
+/**** OCCUPANCY AND MAGIC SECTION ****/
 
-int main(void) {
-  init_leaper_attacks();
+// creates attack mask and maps each occupied square to a bit
+// i.e: 1 = first occupied square from top left to bottom right
+// 2 = 2nd, 3 = 1st + 2nd, 4 = 3rd, 5 = 3rd + 1st, 6 = 3rd + 2nd + 1st etc..
+U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
+  U64 occupancy = 0ULL;
 
-  U64 blocks = 0ULL;
-  set_bit(blocks, c7);
-  set_bit(blocks, f7);
-  set_bit(blocks, f3);
+  for (int count = 0; count < bits_in_mask; count++) {
+    int square = get_lsb_index(attack_mask); // from top left to bottom right
+    pop_bit(attack_mask, square);
 
-  print_bitboard(blocks);
-  print_bitboard(get_lsb(blocks));
-  print_bitboard(get_tz(blocks));
-  printf("pieces: %d\n", count_bits(blocks));
-  printf("lsb index: %d\n", get_lsb_index(blocks));
-  printf("lsb square: %s\n", index_to_notation[get_lsb_index(blocks)]);
+    if ((U64) index & (1ULL << count)) { // if square in specified bit array
+    set_bit(occupancy, square); // add bit
+    }
+  }
 
-
-  return 0;
+  return occupancy;
 }
-
-
-
-
-
 
 // print bitboard
 void print_bitboard(U64 bitboard) {
@@ -359,5 +353,28 @@ void print_bitboard(U64 bitboard) {
 
   printf("    \033[1;93m_______________\n");
   printf("    A B C D E F G H\033[0;0m\n"); // for navigation
+}
+
+
+/***** MAIN FUNCTION *****/
+
+int main(void) {
+  init_leaper_attacks();
+
+  U64 attack_mask = mask_rook_attacks(a1);
+  int count = count_bits(attack_mask);
+
+  int d = 0;
+  for(int i = 0; i < 68; i++) {
+    d = i;
+    if (i == 64) d = 4092;
+    if (i == 65) d = 4093;
+    if (i == 66) d = 4094;
+    if (i == 67) d = 4095;
+    printf("\n\ni: %d\n", d);
+    print_bitboard(set_occupancy(d, count, attack_mask));
+  }
+
+  return 0;
 }
 
