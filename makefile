@@ -67,5 +67,5 @@ r:
 	echo "-------------------------"
 
 win:
-		clear;x86_64-w64-mingw32-gcc src/echo.c -o bin/echo_win32.exe;wine ./bin/echo_win32.exe
+		clear;x86_64-w64-mingw32-gcc src/echo.c -o bin/echo_win64.exe;wine ./bin/echo_win64.exe
 
