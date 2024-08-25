@@ -307,6 +307,51 @@ void init_leaper_attacks() {
 }
 
 
+/**** RELEVANT BIT COUNT LOOKUP TABLE ****/
+const int relevant_bishop_count_bits[64] = {
+  6, 5, 5, 5, 5, 5, 5, 6,
+  5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 7, 7, 7, 7, 5, 5,
+  5, 5, 7, 9, 9, 7, 5, 5,
+  5, 5, 7, 9, 9, 7, 5, 5,
+  5, 5, 7, 7, 7, 7, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5,
+  6, 5, 5, 5, 5, 5, 5, 6
+};
+
+const int relevant_rook_count_bits[64] = {
+  12, 11, 11, 11, 11, 11, 11, 12,
+  11, 10, 10, 10, 10, 10, 10, 11,
+  11, 10, 10, 10, 10, 10, 10, 11,
+  11, 10, 10, 10, 10, 10, 10, 11,
+  11, 10, 10, 10, 10, 10, 10, 11,
+  11, 10, 10, 10, 10, 10, 10, 11,
+  11, 10, 10, 10, 10, 10, 10, 11,
+  12, 11, 11, 11, 11, 11, 11, 12
+};
+
+const int relevant_knight_count_bits[64] = {
+  2, 3, 4, 4, 4, 4, 3, 2,
+  3, 4, 6, 6, 6, 6, 4, 3,
+  4, 6, 8, 8, 8, 8, 6, 4,
+  4, 6, 8, 8, 8, 8, 6, 4,
+  4, 6, 8, 8, 8, 8, 6, 4,
+  4, 6, 8, 8, 8, 8, 6, 4,
+  3, 4, 6, 6, 6, 6, 4, 3,
+  2, 3, 4, 4, 4, 4, 3, 2
+};
+
+const int relevant_queen_count_bits[64] = {
+  18, 16, 16, 16, 16, 16, 16, 18,
+  16, 15, 15, 15, 15, 15, 15, 16,
+  16, 15, 17, 17, 17, 17, 15, 16,
+  16, 15, 17, 19, 19, 17, 15, 16,
+  16, 15, 17, 19, 19, 17, 15, 16,
+  16, 15, 17, 17, 17, 17, 15, 16,
+  16, 15, 15, 15, 15, 15, 15, 16,
+  18, 16, 16, 16, 16, 16, 16, 18
+};
+
 /**** OCCUPANCY AND MAGIC SECTION ****/
 
 // creates attack mask and maps each occupied square to a bit
@@ -320,7 +365,7 @@ U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
     pop_bit(attack_mask, square);
 
     if ((U64) index & (1ULL << count)) { // if square in specified bit array
-    set_bit(occupancy, square); // add bit
+      set_bit(occupancy, square); // add bit
     }
   }
 
@@ -361,18 +406,13 @@ void print_bitboard(U64 bitboard) {
 int main(void) {
   init_leaper_attacks();
 
-  U64 attack_mask = mask_rook_attacks(a1);
-  int count = count_bits(attack_mask);
+  for(int rank = 0; rank < 8; rank++) {
+    for(int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
 
-  int d = 0;
-  for(int i = 0; i < 68; i++) {
-    d = i;
-    if (i == 64) d = 4092;
-    if (i == 65) d = 4093;
-    if (i == 66) d = 4094;
-    if (i == 67) d = 4095;
-    printf("\n\ni: %d\n", d);
-    print_bitboard(set_occupancy(d, count, attack_mask));
+      printf("%d, ", count_bits(mask_rook_attacks(square)) + count_bits(mask_bishop_attacks(square)));
+    }
+    printf("\n");
   }
 
   return 0;
