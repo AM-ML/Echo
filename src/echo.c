@@ -374,6 +374,29 @@ U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
 
 // print bitboard
 void print_bitboard(U64 bitboard) {
+#if defined(_WIN32) || defined(_WIN64)
+  printf("\nPosition: %llu\n", bitboard);
+
+  for (int rank = 0; rank < 8; rank++) {
+    printf("%d|  ", 8-rank);
+
+    for (int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
+
+      if (get_bit(bitboard, square)) {
+        printf("1 ");
+      }
+
+      else { printf("0 "); }
+    }
+
+    printf("\n");
+  }
+
+  printf("    _______________\n");
+  printf("    A B C D E F G H\n"); // for navigation
+
+#else
   // print position id
   printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", bitboard);
 
@@ -398,13 +421,14 @@ void print_bitboard(U64 bitboard) {
 
   printf("    \033[1;93m_______________\n");
   printf("    A B C D E F G H\033[0;0m\n"); // for navigation
+  #endif
 }
 
 
 /**** pseudo random number state ****/
 unsigned int state = 1804289383;
 
-unsigned int get_random() {
+unsigned int get_random_32() {
   unsigned int number = state;
   number ^= number << 13;
   number ^= number >> 17;
@@ -415,15 +439,27 @@ unsigned int get_random() {
   return number;
 }
 
+U64 get_random_64() {
+  U64 n1, n2, n3, n4;
+
+  n1 = (U64) (get_random_32() & 0XFFFF); // slice 16 bits from MS1B side
+  n2 = (U64) (get_random_32() & 0XFFFF);
+  n3 = (U64) (get_random_32() & 0XFFFF);
+  n4 = (U64) (get_random_32() & 0XFFFF);
+
+  return n1 | (n2 << 16) | (n3 << 32) | (n4 << 48);
+}
+
+U64 gen_magic_number() {
+  return get_random_64() & get_random_64() & get_random_64() & get_random_64();
+}
+
 /***** MAIN FUNCTION *****/
 
 int main(void) {
   init_leaper_attacks();
 
-  for(int i = 0; i < 64; i++) {
-    printf("%u ", get_random());
-  }
-  printf("\n");
+    print_bitboard(gen_magic_number());
 
   return 0;
 }
