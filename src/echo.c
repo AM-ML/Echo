@@ -401,19 +401,29 @@ void print_bitboard(U64 bitboard) {
 }
 
 
+/**** pseudo random number state ****/
+unsigned int state = 1804289383;
+
+unsigned int get_random() {
+  unsigned int number = state;
+  number ^= number << 13;
+  number ^= number >> 17;
+  number ^= number << 5;
+
+  state = number;
+
+  return number;
+}
+
 /***** MAIN FUNCTION *****/
 
 int main(void) {
   init_leaper_attacks();
 
-  for(int rank = 0; rank < 8; rank++) {
-    for(int file = 0; file < 8; file++) {
-      int square = RF_2SQ(rank, file);
-
-      printf("%d, ", count_bits(mask_rook_attacks(square)) + count_bits(mask_bishop_attacks(square)));
-    }
-    printf("\n");
+  for(int i = 0; i < 64; i++) {
+    printf("%u ", get_random());
   }
+  printf("\n");
 
   return 0;
 }
