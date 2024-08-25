@@ -4,6 +4,7 @@ ftest
 truth
 test
 echo
+*.exe
 
 # Prerequisites
 *.d
