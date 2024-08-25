@@ -66,3 +66,6 @@ r:
 	echo "\033[1;94m----\033[1;96mRuntime: \033[1;93m$${runtime_ms2}ms\033[0;0m..."; \
 	echo "-------------------------"
 
+win:
+		clear;x86_64-w64-mingw32-gcc src/echo.c -o bin/echo_win32.exe;wine ./bin/echo_win32.exe
+
