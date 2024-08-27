@@ -69,3 +69,32 @@ r:
 win:
 		clear;x86_64-w64-mingw32-gcc src/echo.c -o bin/echo_win64.exe;wine ./bin/echo_win64.exe
 
+compile:
+	clear;
+	@start=`date +%s%N`; \
+	${normal_gcc}; \
+	end=`date +%s%N`; \
+	runtime=$$((end - start)); \
+	runtime_ms=$$((runtime / 1000000)); \
+	echo "-------------------------"; \
+	echo "\033[1;96mCompilation: \033[1;93m$${runtime_ms}ms\033[0;0m..."; \
+	echo "-------------------------"
+
+
+math:
+	clear;
+	@start=`date +%s%N`; \
+	${normal_gcc} -lm; \
+	end=`date +%s%N`; \
+	runtime=$$((end - start)); \
+	runtime_ms=$$((runtime / 1000000)); \
+	start2=`date +%s%N`; \
+	./bin/echo; \
+	end2=`date +%s%N`; \
+	runtime2=$$((end2 - start2)); \
+	runtime_ms2=$$((runtime2 / 1000000)); \
+	echo "-------------------------"; \
+	echo "\033[1;96mCompilation: \033[1;93m$${runtime_ms}ms\033[0;0m..."; \
+	echo "\033[1;94m----\033[1;96mRuntime: \033[1;93m$${runtime_ms2}ms\033[0;0m..."; \
+	echo "-------------------------"
+
