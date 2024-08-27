@@ -173,7 +173,7 @@ void print_bitboard_piece(int piece_square, U64 bitboard) {
       int square = RF_2SQ(rank, file);
 
       if (square == piece_square) {
-        printf("\033[1;95mP ");
+        printf("\033[1;93mP ");
       }
 
       else if (get_bit(bitboard, square)) {
@@ -635,6 +635,7 @@ int main(void) {
   print_bitboard_piece(a6, bishop_masks[a6]);
   print_bitboard_piece(a7, bishop_masks[a7]);
   print_bitboard_piece(a8, bishop_masks[a8]);
+  print_bitboard_piece(e4, rook_masks[e4]);
 
   return 0;
 }
