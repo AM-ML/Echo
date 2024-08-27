@@ -402,6 +402,7 @@ U64 gen_magic_number() {
   return get_random_64() & get_random_64() & get_random_64() & get_random_64();
 }
 
+#include <string.h>
 U64 find_magic_number(int square, int relevant_bits_count, int flag) {
   U64 occupancies[4096]; // max: 4096 bytes or 12 occupied squares for rook
 
@@ -409,21 +410,44 @@ U64 find_magic_number(int square, int relevant_bits_count, int flag) {
 
   U64 used_attacks[4096];
 
-  U64 attack_mask = flag == bishop ? mask_bishop_attacks(square) : mask_rook_attacks(square);
+  U64 attack_mask = flag ? mask_bishop_attacks(square) : mask_rook_attacks(square);
 
-  U64 occupancy_indicies = 1ULL << relevant_bits_count;
+  U64 occupancy_indicies = 1 << relevant_bits_count;
 
   for(int index = 0; index < occupancy_indicies; index++){ // loop over indicies
     occupancies[index] = set_occupancy(index, relevant_bits_count, attack_mask); // store each possibility
 
-    attacks[index] = bishop? relevant_bishop_attacks(square, occupancies[index]) //
+    attacks[index] = flag ? relevant_bishop_attacks(square, occupancies[index]) //
                            : relevant_rook_attacks(square, occupancies[index]);
   }
 
-  for(int random_count = 0; random_count < 40; random_count++) {
+  for(int random_count = 0; random_count < 800000000; random_count++) {
     U64 magic_number = gen_magic_number();
 
-    // if (count_bits() < 6) continue;
+    if (count_bits((attack_mask * magic_number) & 0xFF00000000000000) < 6) continue;
+
+    memset(used_attacks, 0ULL, sizeof(used_attacks));
+
+    int index, fail;
+
+    // loop over occupancy indicies
+    for(index = 0, fail = 0; !fail && index < occupancy_indicies; index++) {
+      int magic_index = (int)((occupancies[index] * magic_number ) >> (64 - relevant_bits_count));
+
+      if (used_attacks[magic_index] == 0ULL) used_attacks[magic_index] = attacks[index];
+      else if (used_attacks[magic_index] != attacks[index]) fail = 1;
+    }
+
+    if(!fail) return magic_number;
+
+  }
+  printf("\b    attempt failed.\n");
+  return 0ULL;
+}
+
+void init_magic_numbers() {
+  for(int square = 0; square < 64; square++) {
+    printf("%llu\n", find_magic_number(square, relevant_rook_count_bits[square], rook));
   }
 }
 
@@ -483,7 +507,7 @@ void print_bitboard(U64 bitboard) {
 void automate_occupancy(U64 mask) {
   int count = count_bits(mask);
 
-  for (int i = 1, b = 1; i <= count; i++, b = pow(2, i) -1) {
+  for (int i = 1, b = 1; i <= count; i++, b = (int)pow(2, i) -1) {
     print_bitboard (set_occupancy (b, count, mask));
   }
 }
@@ -493,15 +517,7 @@ void automate_occupancy(U64 mask) {
 int main(void) {
   init_leaper_attacks();
 
-  U64 board = 0ULL;
-  set_bit(board, e4);
-  set_bit(board, e6);
-
-
-
-  U64 mask = relevant_rook_attacks(e4, board);
-
-  automate_occupancy(mask);
+  init_magic_numbers();
 
   return 0;
 }
