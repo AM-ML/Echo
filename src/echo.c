@@ -23,7 +23,7 @@ enum {
 };
 
 enum { white, black };
-
+enum { rook, bishop };
 
 /***** Constants *****/
 const char *index_to_notation[] = {
@@ -402,6 +402,31 @@ U64 gen_magic_number() {
   return get_random_64() & get_random_64() & get_random_64() & get_random_64();
 }
 
+U64 find_magic_number(int square, int relevant_bits_count, int flag) {
+  U64 occupancies[4096]; // max: 4096 bytes or 12 occupied squares for rook
+
+  U64 attacks[4096]; // max: same as occupied
+
+  U64 used_attacks[4096];
+
+  U64 attack_mask = flag == bishop ? mask_bishop_attacks(square) : mask_rook_attacks(square);
+
+  U64 occupancy_indicies = 1ULL << relevant_bits_count;
+
+  for(int index = 0; index < occupancy_indicies; index++){ // loop over indicies
+    occupancies[index] = set_occupancy(index, relevant_bits_count, attack_mask); // store each possibility
+
+    attacks[index] = bishop? relevant_bishop_attacks(square, occupancies[index]) //
+                           : relevant_rook_attacks(square, occupancies[index]);
+  }
+
+  for(int random_count = 0; random_count < 40; random_count++) {
+    U64 magic_number = gen_magic_number();
+
+    // if (count_bits() < 6) continue;
+  }
+}
+
 // print bitboard
 void print_bitboard(U64 bitboard) {
 #if defined(_WIN32) || defined(_WIN64)
@@ -454,15 +479,29 @@ void print_bitboard(U64 bitboard) {
   #endif
 }
 
+#include <math.h>
+void automate_occupancy(U64 mask) {
+  int count = count_bits(mask);
+
+  for (int i = 1, b = 1; i <= count; i++, b = pow(2, i) -1) {
+    print_bitboard (set_occupancy (b, count, mask));
+  }
+}
 
 /***** MAIN FUNCTION *****/
 
 int main(void) {
   init_leaper_attacks();
 
-    print_bitboard(gen_magic_number());
-    print_bitboard(gen_magic_number());
-    print_bitboard(gen_magic_number());
+  U64 board = 0ULL;
+  set_bit(board, e4);
+  set_bit(board, e6);
+
+
+
+  U64 mask = relevant_rook_attacks(e4, board);
+
+  automate_occupancy(mask);
 
   return 0;
 }
