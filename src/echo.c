@@ -82,9 +82,115 @@ const U64 not_rank_8 = 18446744073709551360ULL;
 #define get_lsb_index(bitboard) ((bitboard)? count_bits(get_tz(bitboard)) : -1)
 
 
-// prototypes
-void print_bitboard(U64 bitboard);
+// print bitboard
+void print_bitboard(U64 bitboard) {
+#if defined(_WIN32) || defined(_WIN64)
+  printf("\nPosition: %llu\n", bitboard);
 
+  for (int rank = 0; rank < 8; rank++) {
+    printf("%d|  ", 8-rank);
+
+    for (int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
+
+      if (get_bit(bitboard, square)) {
+        printf("1 ");
+      }
+
+      else { printf("0 "); }
+    }
+
+    printf("\n");
+  }
+
+  printf("    _______________\n");
+  printf("    A B C D E F G H\n"); // for navigation
+
+#else
+  // print position id
+  printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", bitboard);
+
+  // loop over ranks / rows
+  for (int rank = 0; rank < 8; rank++) {
+    printf("\033[1;93m%d|  \033[0;0m", 8-rank); // for navigation
+
+    // loop over files / columns
+    for (int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
+
+      if (get_bit(bitboard, square)) {
+        printf("\033[1;91m1 ");
+      }
+
+      else { printf("\033[1;96m0 "); }
+    }
+
+    // seperate ranks
+    printf("\n");
+  }
+
+  printf("    \033[1;93m_______________\n");
+  printf("    A B C D E F G H\033[0;0m\n"); // for navigation
+  #endif
+}
+
+void print_bitboard_piece(int piece_square, U64 bitboard) {
+#if defined(_WIN32) || defined(_WIN64)
+  printf("\nPosition: %llu\n", bitboard);
+
+  for (int rank = 0; rank < 8; rank++) {
+    printf("%d|  ", 8-rank);
+
+    for (int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
+
+      if (square == piece_square) {
+        printf("P ");
+      }
+
+      else if (get_bit(bitboard, square)) {
+        printf("1 ");
+      }
+      else { printf("0 "); }
+    }
+
+    printf("\n");
+  }
+
+  printf("    _______________\n");
+  printf("    A B C D E F G H\n"); // for navigation
+
+#else
+  // print position id
+  printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", bitboard);
+
+  // loop over ranks / rows
+  for (int rank = 0; rank < 8; rank++) {
+    printf("\033[1;93m%d|  \033[0;0m", 8-rank); // for navigation
+
+    // loop over files / columns
+    for (int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
+
+      if (square == piece_square) {
+        printf("\033[1;95mP ");
+      }
+
+      else if (get_bit(bitboard, square)) {
+        printf("\033[1;91m1 ");
+      }
+
+      else { printf("\033[1;96m0 "); }
+    }
+
+    // seperate ranks
+    printf("\n");
+  }
+
+  printf("    \033[1;93m_______________\n");
+  printf("    A B C D E F G H\033[0;0m\n"); // for navigation
+  #endif
+}
 
 
 
@@ -173,7 +279,7 @@ U64 mask_king_attacks(int square) {
 
 /**** bishop ****/
 
-U64 bishop_attacks[64];
+U64 bishop_masks[64];
 
 U64 mask_bishop_attacks(int square) {
   U64 attacks = 0ULL;
@@ -238,7 +344,7 @@ U64 relevant_bishop_attacks(int square, U64 block) {
 
 
 /**** rook ****/
-U64 rook_attacks[64];
+U64 rook_masks[64];
 
 U64 mask_rook_attacks(int square) {
   U64 attacks = 0ULL;
@@ -301,8 +407,8 @@ void init_leaper_attacks() {
     pawn_attacks[black][square] = mask_pawn_attacks(black, square);
     knight_attacks[square] = mask_knight_attacks(square);
     king_attacks[square] = mask_king_attacks(square);
-    bishop_attacks[square] = mask_bishop_attacks(square);
-    rook_attacks[square] = mask_rook_attacks(square);
+    bishop_masks[square] = mask_bishop_attacks(square);
+    rook_masks[square] = mask_rook_attacks(square);
   }
 }
 
@@ -495,57 +601,6 @@ void init_magic_numbers() {
   printf("\n");
 }
 
-// print bitboard
-void print_bitboard(U64 bitboard) {
-#if defined(_WIN32) || defined(_WIN64)
-  printf("\nPosition: %llu\n", bitboard);
-
-  for (int rank = 0; rank < 8; rank++) {
-    printf("%d|  ", 8-rank);
-
-    for (int file = 0; file < 8; file++) {
-      int square = RF_2SQ(rank, file);
-
-      if (get_bit(bitboard, square)) {
-        printf("1 ");
-      }
-
-      else { printf("0 "); }
-    }
-
-    printf("\n");
-  }
-
-  printf("    _______________\n");
-  printf("    A B C D E F G H\n"); // for navigation
-
-#else
-  // print position id
-  printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", bitboard);
-
-  // loop over ranks / rows
-  for (int rank = 0; rank < 8; rank++) {
-    printf("\033[1;93m%d|  \033[0;0m", 8-rank); // for navigation
-
-    // loop over files / columns
-    for (int file = 0; file < 8; file++) {
-      int square = RF_2SQ(rank, file);
-
-      if (get_bit(bitboard, square)) {
-        printf("\033[1;91m1 ");
-      }
-
-      else { printf("\033[1;96m0 "); }
-    }
-
-    // seperate ranks
-    printf("\n");
-  }
-
-  printf("    \033[1;93m_______________\n");
-  printf("    A B C D E F G H\033[0;0m\n"); // for navigation
-  #endif
-}
 
 int bin(int p) {
   int result = 1;
@@ -572,11 +627,14 @@ void init_all() {
 int main(void) {
   init_all();
 
-  for(int square = 0; square < 64; square++) {
-    printf("\033[0;96m%lluULL,  ", rook_magic_numbers[square]);
-    printf("\033[0;91m%lluULL,\n", bishop_magic_numbers[square]);
-  }
-
+  print_bitboard_piece(a1, bishop_masks[a1]);
+  print_bitboard_piece(a2, bishop_masks[a2]);
+  print_bitboard_piece(a3, bishop_masks[a3]);
+  print_bitboard_piece(a4, bishop_masks[a4]);
+  print_bitboard_piece(a5, bishop_masks[a5]);
+  print_bitboard_piece(a6, bishop_masks[a6]);
+  print_bitboard_piece(a7, bishop_masks[a7]);
+  print_bitboard_piece(a8, bishop_masks[a8]);
 
   return 0;
 }
