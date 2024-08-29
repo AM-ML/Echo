@@ -27,6 +27,7 @@ enum { rook, bishop };
 enum { wP, wN, wB, wR, wQ, wK, bP, bN, bB, bR, bQ, bK };
 enum { WCK = 1, WCQ = 2, BCK = 4, BCQ = 8};
 
+char ascii_pieces[12] = "PNBRQKpnbrqk";
 int decode_ascii_pieces[] = {
   ['P'] = wP,
   ['N'] = wN,
@@ -44,6 +45,12 @@ int decode_ascii_pieces[] = {
 
 U64 bitboards[12]; // pieces bbs
 U64 sides_occupancies[3]; // sides
+
+int side_to_move = -1;
+
+int can_castle; // WCK WCQ BCQ BCK
+
+int en_passant = no_square;
 
 /***** Constants *****/
 const char *index_to_notation[] = {
@@ -700,14 +707,57 @@ void init_all() {
 int main(void) {
   init_all();
 
-  U64 board = 0ULL;
-  set_bit(board, e6);
-  set_bit(board, d6);
-  set_bit(board, d5);
-  print_bitboard_piece(e5, get_bishop_attacks(e5, board));
-  print_bitboard_piece(e6, get_bishop_attacks(e6, board));
-  print_bitboard_piece(e5, get_rook_attacks(e5, board));
-  print_bitboard_piece(e6, get_rook_attacks(e6, board));
+  set_bit(bitboards[wP], a2);
+  set_bit(bitboards[wP], b2);
+  set_bit(bitboards[wP], c2);
+  set_bit(bitboards[wP], d2);
+  set_bit(bitboards[wP], e2);
+  set_bit(bitboards[wP], f2);
+  set_bit(bitboards[wP], g2);
+  set_bit(bitboards[wP], h2);
+  set_bit(bitboards[wR], a1);
+  set_bit(bitboards[wR], h1);
+  set_bit(bitboards[wN], b1);
+  set_bit(bitboards[wN], g1);
+  set_bit(bitboards[wB], c1);
+  set_bit(bitboards[wB], f1);
+  set_bit(bitboards[wQ], d1);
+  set_bit(bitboards[wK], e1);
+
+
+
+
+  set_bit(bitboards[bP], a7);
+  set_bit(bitboards[bP], b7);
+  set_bit(bitboards[bP], c7);
+  set_bit(bitboards[bP], d7);
+  set_bit(bitboards[bP], e7);
+  set_bit(bitboards[bP], f7);
+  set_bit(bitboards[bP], g7);
+  set_bit(bitboards[bP], h7);
+  set_bit(bitboards[bR], a8);
+  set_bit(bitboards[bR], h8);
+  set_bit(bitboards[bN], b8);
+  set_bit(bitboards[bN], g8);
+  set_bit(bitboards[bB], c8);
+  set_bit(bitboards[bB], f8);
+  set_bit(bitboards[bQ], d8);
+  set_bit(bitboards[bK], e8);
+
+  print_bitboard(bitboards[wK] | bitboards[bK]);
+  print_bitboard(bitboards[wQ] | bitboards[bQ]);
+  print_bitboard(bitboards[wB] | bitboards[bB]);
+  print_bitboard(bitboards[wN] | bitboards[bN]);
+  print_bitboard(bitboards[wR] | bitboards[bR]);
+  print_bitboard(bitboards[wP] | bitboards[bP]);
+
+  sides_occupancies[white] = bitboards[wP] | bitboards[wN] | bitboards[wB] | bitboards[wR] | bitboards[wQ] | bitboards[wK];
+  sides_occupancies[black] = bitboards[bP] | bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ] | bitboards[bK];
+  sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
+
+  print_bitboard(sides_occupancies[white]);
+  print_bitboard(sides_occupancies[black]);
+  print_bitboard(sides_occupancies[both]);
 
   return 0;
 }
