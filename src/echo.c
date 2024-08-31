@@ -100,9 +100,9 @@ const U64 not_rank_1 = 72057594037927935ULL;
 const U64 not_rank_8 = 18446744073709551360ULL;
 
 // set/get/pop macros
-#define get_bit(bitboard, square) (bitboard & (1ULL << square))
-#define set_bit(bitboard, square) (bitboard |= 1ULL << square)
-#define pop_bit(bitboard, square) (get_bit(bitboard, square)? (bitboard -= 1ULL << square): 0)
+#define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
+#define set_bit(bitboard, square) ((bitboard) |= 1ULL << (square))
+#define pop_bit(bitboard, square) (get_bit((bitboard), (square))? ((bitboard) -= 1ULL << (square)): 0)
 #define count_bits(bitboard) (__builtin_popcountll(bitboard))
 #define get_lsb(bitboard) ((bitboard) & -(bitboard))
 #define get_tz(bitboard) (((bitboard) & -(bitboard)) - 1)
@@ -697,52 +697,40 @@ void automate_occupancy(U64 mask) {
 
 /***** MAIN FUNCTION *****/
 
+void init_default_board_position() {
+  bitboards[bP] = 65280ULL;
+  bitboards[wP] = 71776119061217280ULL;
+
+  bitboards[wR] = 9295429630892703744ULL;
+  bitboards[bR] = 129ULL;
+
+  bitboards[wB] = 2594073385365405696ULL;
+  bitboards[bB] = 36ULL;
+
+  bitboards[wN] = 4755801206503243776ULL;
+  bitboards[bN] = 66ULL;
+
+  bitboards[wQ] = 576460752303423488ULL;
+  bitboards[bQ] = 8ULL;
+
+  bitboards[wK] = 1152921504606846976ULL;
+  bitboards[bK] = 16ULL;
+
+  sides_occupancies[white] = bitboards[wP] | bitboards[wN] | bitboards[wB] | bitboards[wR] | bitboards[wQ] | bitboards[wK];
+  sides_occupancies[black] = bitboards[bP] | bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ] | bitboards[bK];
+  sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
+}
+
 void init_all() {
   init_leaper_attacks();
   init_sliding_pieces(bishop);
   init_sliding_pieces(rook);
+  init_default_board_position();
   // init_magic_numbers();
 }
 
 int main(void) {
   init_all();
-
-  set_bit(bitboards[wP], a2);
-  set_bit(bitboards[wP], b2);
-  set_bit(bitboards[wP], c2);
-  set_bit(bitboards[wP], d2);
-  set_bit(bitboards[wP], e2);
-  set_bit(bitboards[wP], f2);
-  set_bit(bitboards[wP], g2);
-  set_bit(bitboards[wP], h2);
-  set_bit(bitboards[wR], a1);
-  set_bit(bitboards[wR], h1);
-  set_bit(bitboards[wN], b1);
-  set_bit(bitboards[wN], g1);
-  set_bit(bitboards[wB], c1);
-  set_bit(bitboards[wB], f1);
-  set_bit(bitboards[wQ], d1);
-  set_bit(bitboards[wK], e1);
-
-
-
-
-  set_bit(bitboards[bP], a7);
-  set_bit(bitboards[bP], b7);
-  set_bit(bitboards[bP], c7);
-  set_bit(bitboards[bP], d7);
-  set_bit(bitboards[bP], e7);
-  set_bit(bitboards[bP], f7);
-  set_bit(bitboards[bP], g7);
-  set_bit(bitboards[bP], h7);
-  set_bit(bitboards[bR], a8);
-  set_bit(bitboards[bR], h8);
-  set_bit(bitboards[bN], b8);
-  set_bit(bitboards[bN], g8);
-  set_bit(bitboards[bB], c8);
-  set_bit(bitboards[bB], f8);
-  set_bit(bitboards[bQ], d8);
-  set_bit(bitboards[bK], e8);
 
   print_bitboard(bitboards[wK] | bitboards[bK]);
   print_bitboard(bitboards[wQ] | bitboards[bQ]);
@@ -750,10 +738,6 @@ int main(void) {
   print_bitboard(bitboards[wN] | bitboards[bN]);
   print_bitboard(bitboards[wR] | bitboards[bR]);
   print_bitboard(bitboards[wP] | bitboards[bP]);
-
-  sides_occupancies[white] = bitboards[wP] | bitboards[wN] | bitboards[wB] | bitboards[wR] | bitboards[wQ] | bitboards[wK];
-  sides_occupancies[black] = bitboards[bP] | bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ] | bitboards[bK];
-  sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
 
   print_bitboard(sides_occupancies[white]);
   print_bitboard(sides_occupancies[black]);
