@@ -47,7 +47,7 @@ int decode_ascii_pieces[] = {
 U64 bitboards[12]; // pieces bbs
 U64 sides_occupancies[3]; // sides
 
-int side_to_move = -1;
+int side_to_move = white;
 
 int can_castle; // WCK WCQ BCQ BCK
 
@@ -227,7 +227,10 @@ void print_board(int flag) {
   flag = 0;
   printf("\nPosition: %llu\n", sides_occupancies[both]);
 #else
-  printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", sides_occupancies[both]);
+  printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m", sides_occupancies[both]);
+  printf("\n\033[1;93mCastling: \033[1;95m%s\033[0;0m", can_castle? "Available": "_");
+  printf("\n\033[1;93mEn Passant: \033[1;95m%s\033[0;0m\n\n", en_passant? "Available": "_");
+  side_to_move != -1 &&  printf("%s\033[1;93m To Move\033[0;0m\n",side_to_move == white? "\033[1;96mWhite" : "\033[1;91mBlack");
 #endif
 
 
