@@ -850,6 +850,26 @@ static inline U64 get_rook_attacks(int square, U64 blockers) {
   return rook_attacks[square][blockers];
 }
 
+static inline U64 get_queen_attacks(int square, U64 blockers) {
+  U64 rook_blockers, bishop_blockers, result;
+  rook_blockers = blockers;
+  bishop_blockers = blockers;
+
+  rook_blockers &= rook_masks[square];
+  rook_blockers *= rook_magic_numbers[square];
+  rook_blockers >>= 64 - relevant_rook_count_bits[square];
+
+  result = rook_attacks[square][rook_blockers];
+
+  bishop_blockers &= bishop_masks[square];
+  bishop_blockers *= bishop_magic_numbers[square];
+  bishop_blockers >>= 64 - relevant_bishop_count_bits[square];
+
+  result |= bishop_attacks[square][bishop_blockers];
+
+  return result;
+}
+
 void init_magic_numbers() {
   for(int square = 0; square < 64; square++) {
     rook_magic_numbers[square] = find_magic_number(square, relevant_rook_count_bits[square], rook);
@@ -914,10 +934,12 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(cmk_position);
-  print_board(1);
-  print_bitboard(sides_occupancies[white]);
-  print_bitboard(sides_occupancies[black]);
+  U64 board = 0ULL;
+  set_bit(board, e4);
+  set_bit(board, e6);
+  set_bit(board, c6);
+
+  print_bitboard_piece(e4, get_queen_attacks(e4, board));
 
   return 0;
 }
