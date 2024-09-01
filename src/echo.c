@@ -196,6 +196,7 @@ void parse_fen (char *fen) {
     char square_char[] = {*fen, *(fen+1)};
     int square = char_to_square(square_char);
     en_passant = square;
+    fen += 2;
   }
   // discard ply and move count for now
   set_sides_occupancies();
@@ -913,14 +914,10 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(start_position);
-  print_board(1);
-
-  parse_fen(tricky_position);
-  print_board(1);
-
   parse_fen(cmk_position);
   print_board(1);
+  print_bitboard(sides_occupancies[white]);
+  print_bitboard(sides_occupancies[black]);
 
   return 0;
 }
