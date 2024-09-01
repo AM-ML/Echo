@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 // define bitboard data type
 #define U64 unsigned long long
@@ -7,7 +8,12 @@
 #define RF_2SQ(r, f) (r * 8 + f)
 
 
-
+// FEN CONSTANTS
+#define empty_board "8/8/8/8/8/8/8/8 w - - "
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
+#define killer_position "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
+#define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
 
 
 // Big Endian File-Rank Mapping
@@ -54,16 +60,35 @@ int can_castle; // WCK WCQ BCQ BCK
 int en_passant = no_square;
 
 /***** Constants *****/
-const char *index_to_notation[] = {
-  "A8", "B8", "C8", "D8", "E8", "F8", "G8", "H8",
-  "A7", "B7", "C7", "D7", "E7", "F7", "G7", "H7",
-  "A6", "B6", "C6", "D6", "E6", "F6", "G6", "H6",
-  "A5", "B5", "C5", "D5", "E5", "F5", "G5", "H5",
-  "A4", "B4", "C4", "D4", "E4", "F4", "G4", "H4",
-  "A3", "B3", "C3", "D3", "E3", "F3", "G3", "H3",
-  "A2", "B2", "C2", "D2", "E2", "F2", "G2", "H2",
-  "A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1"
+const char *square_to_notation[] = {
+  "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
+  "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
+  "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
+  "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5",
+  "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
+  "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
+  "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
+  "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"
 };
+int char_to_square(const char *square) {
+    if (strlen(square) != 2) {
+        return -1; // Invalid input length
+    }
+
+    char file = square[0];
+    char rank = square[1];
+
+    // Validate rank and file
+    if (file < 'a' || file > 'h' || rank < '1' || rank > '8') {
+        return -1; // Invalid file or rank
+    }
+
+    // Calculate the index in the enum
+    int file_index = file - 'a'; // 0 for 'a', 1 for 'b', ..., 7 for 'h'
+    int rank_index = 8 - (rank - '0'); // 0 for '8', 1 for '7', ..., 7 for '1'
+
+    return rank_index * 8 + file_index; // Convert to square enum/int
+}
 
 
 /****************
@@ -108,6 +133,74 @@ const U64 not_rank_8 = 18446744073709551360ULL;
 #define get_lsb(bitboard) ((bitboard) & -(bitboard))
 #define get_tz(bitboard) (((bitboard) & -(bitboard)) - 1)
 #define get_lsb_index(bitboard) ((bitboard)? count_bits(get_tz(bitboard)) : -1)
+
+void reset_states_and_board() {
+  memset(bitboards, 0ULL, sizeof(bitboards));
+  memset(sides_occupancies, 0ULL, sizeof(sides_occupancies));
+
+  can_castle = 0;
+  en_passant = no_square;
+  side_to_move = -1;
+
+}
+void set_sides_occupancies() {
+  sides_occupancies[white] = bitboards[wP] | bitboards[wN] | bitboards[wB] | bitboards[wR] | bitboards[wQ] | bitboards[wK];
+  sides_occupancies[black] = bitboards[bP] | bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ] | bitboards[bK];
+  sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
+}
+void parse_fen (char *fen) {
+  reset_states_and_board();
+
+  for (int rank = 0; rank < 8; rank++) {
+    for (int file = 0; file < 8; ) { // manual increment
+      int square = RF_2SQ(rank, file);
+
+      if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z')) {
+        int piece = decode_ascii_pieces[*fen++];
+        set_bit(bitboards[piece], square);
+        file++;
+      }
+
+      else if (*fen >= '1' && *fen <= '8') {
+        int empty_squares = *fen++ - '0';
+        file += empty_squares;
+      }
+
+      else {
+        fen++;
+      }
+    }
+  }
+
+  // set state variables
+  while(*fen == ' ') fen++;
+  if (*fen == 'w') side_to_move = white;
+  if (*fen == 'b') side_to_move = black;
+  fen++;
+  while(*fen == ' ') fen++;
+  if (*fen == '-') { can_castle = 0; fen++;}
+  else {
+    while(*fen != ' ') {
+      if(*fen == 'K') can_castle |= WCK;
+      if(*fen == 'Q') can_castle |= WCQ;
+      if(*fen == 'k') can_castle |= BCK;
+      if(*fen == 'q') can_castle |= BCQ;
+      fen++;
+    }
+  }
+  while(*fen == ' ') fen++;
+  if (*fen == '-') {
+    en_passant = no_square;
+    fen++;
+  } else {
+    char square_char[] = {*fen, *(fen+1)};
+    int square = char_to_square(square_char);
+    en_passant = square;
+  }
+  // discard ply and move count for now
+  set_sides_occupancies();
+}
+
 
 
 // print bitboard
@@ -233,7 +326,7 @@ void print_board(int flag) {
                                                               can_castle & WCQ? 'Q': '_',
                                                               can_castle & BCK? 'k': '_',
                                                               can_castle & BCQ? 'q': '_');
-  printf("\n\033[1;93mEn Passant: \033[1;95m%s\033[0;0m\n\n", en_passant != no_square? "Available": "_");
+  printf("\n\033[1;93mEn Passant: \033[1;95m%s\033[0;0m\n\n", en_passant != no_square? square_to_notation[en_passant]: "_");
   side_to_move != -1 &&  printf("%s\033[1;93m To Move\033[0;0m\n",side_to_move == white? "\033[1;96mWhite" : "\033[1;91mBlack");
 #endif
 
@@ -666,7 +759,6 @@ U64 gen_magic_number() {
   return get_random_64() & get_random_64() & get_random_64() & get_random_64();
 }
 
-#include <string.h>
 U64 find_magic_number(int square, int relevant_bits_count, int flag) {
   U64 occupancies[4096]; // max: 4096 bytes or 12 occupied squares for rook
 
@@ -807,9 +899,7 @@ void init_default_board_position() {
   bitboards[wK] = 1152921504606846976ULL;
   bitboards[bK] = 16ULL;
 
-  sides_occupancies[white] = bitboards[wP] | bitboards[wN] | bitboards[wB] | bitboards[wR] | bitboards[wQ] | bitboards[wK];
-  sides_occupancies[black] = bitboards[bP] | bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ] | bitboards[bK];
-  sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
+  set_sides_occupancies();
 }
 
 void init_all() {
@@ -823,16 +913,14 @@ void init_all() {
 int main(void) {
   init_all();
 
-  en_passant = 1;
-  side_to_move = black;
-  can_castle = 0b1111;
-  print_bitboard(sides_occupancies[both]);
+  parse_fen(start_position);
   print_board(1);
 
-  for(int piece = wP; piece < bK; piece++) {
-    printf("\033[1;93mPiece: \033[1;95m%c\033[0;0m\n", ascii_pieces[piece]);
-    print_bitboard(bitboards[piece]);
-  }
+  parse_fen(tricky_position);
+  print_board(1);
+
+  parse_fen(cmk_position);
+  print_board(1);
 
   return 0;
 }
