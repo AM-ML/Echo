@@ -47,7 +47,7 @@ int decode_ascii_pieces[] = {
 U64 bitboards[12]; // pieces bbs
 U64 sides_occupancies[3]; // sides
 
-int side_to_move = white;
+int side_to_move = -1;
 
 int can_castle; // WCK WCQ BCQ BCK
 
@@ -228,8 +228,12 @@ void print_board(int flag) {
   printf("\nPosition: %llu\n", sides_occupancies[both]);
 #else
   printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m", sides_occupancies[both]);
-  printf("\n\033[1;93mCastling: \033[1;95m%s\033[0;0m", can_castle? "Available": "_");
-  printf("\n\033[1;93mEn Passant: \033[1;95m%s\033[0;0m\n\n", en_passant? "Available": "_");
+  printf("\n\033[1;93mCastling: \033[1;95m%c%c%c%c\033[0;0m",
+                                                              can_castle & WCK? 'K': '_',
+                                                              can_castle & WCQ? 'Q': '_',
+                                                              can_castle & BCK? 'k': '_',
+                                                              can_castle & BCQ? 'q': '_');
+  printf("\n\033[1;93mEn Passant: \033[1;95m%s\033[0;0m\n\n", en_passant != no_square? "Available": "_");
   side_to_move != -1 &&  printf("%s\033[1;93m To Move\033[0;0m\n",side_to_move == white? "\033[1;96mWhite" : "\033[1;91mBlack");
 #endif
 
@@ -819,8 +823,16 @@ void init_all() {
 int main(void) {
   init_all();
 
+  en_passant = 1;
+  side_to_move = black;
+  can_castle = 0b1111;
   print_bitboard(sides_occupancies[both]);
   print_board(1);
+
+  for(int piece = wP; piece < bK; piece++) {
+    printf("\033[1;93mPiece: \033[1;95m%c\033[0;0m\n", ascii_pieces[piece]);
+    print_bitboard(bitboards[piece]);
+  }
 
   return 0;
 }
