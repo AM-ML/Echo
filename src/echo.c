@@ -934,12 +934,8 @@ void init_all() {
 int main(void) {
   init_all();
 
-  U64 board = 0ULL;
-  set_bit(board, e4);
-  set_bit(board, e6);
-  set_bit(board, c6);
-
-  print_bitboard_piece(e4, get_queen_attacks(e4, board));
+    parse_fen("8/8/8/3p4/4P3/8/8/8 w - -");
+    print_board(1);
 
   return 0;
 }
