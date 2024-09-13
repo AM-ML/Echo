@@ -969,7 +969,7 @@ static inline U64 get_attacked_squares_by(int side) {
     return attack_map;
 }
 
-#define print_attacked_squares_by(side) (print_bitboard(get_attacked_squares_by((side))))
+#define print_attacked_squares_by(side) (print_bitboard(((side) != both? get_attacked_squares_by((side)) : get_attacked_squares_by(white) | get_attacked_squares_by(black))))
 
 int main(void) {
     init_all();
@@ -978,8 +978,14 @@ int main(void) {
     // parse_fen(start_position);
     print_board(1);
 
-    printf("%s  ", is_square_attacked_by(d5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
-    printf("%s  ", is_square_attacked_by(e5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
-    printf("%s  \033[0;0m\n", is_square_attacked_by(f5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
+    printf("\n\033[1;93mD5 %s  ", is_square_attacked_by(d5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
+    printf("\033[1;93mE5 %s  ", is_square_attacked_by(e5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
+    printf("\033[1;93mF5 %s  \033[0;0m\n\n", is_square_attacked_by(f5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
+
+    print_attacked_squares_by(both);
+
+    parse_fen(start_position);
+    print_attacked_squares_by(both);
+
     return 0;
 }
