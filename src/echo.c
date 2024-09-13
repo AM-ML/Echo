@@ -870,6 +870,48 @@ static inline U64 get_queen_attacks(int square, U64 blockers) {
   return result;
 }
 
+static inline int is_square_attacked_by(int square, int side) {
+    int opposing_side = (side == white) ? black : white;
+
+    // Pawn attack
+    if (pawn_attacks[opposing_side][square] & bitboards[(opposing_side == black) ? wP : bP]) return 1;
+
+    // Knight attack
+    U64 knight_mask = knight_attacks[square];
+    if (knight_mask & bitboards[(opposing_side == black) ? wN : bN]) return 1;
+
+    // Rook attack
+    U64 rook_mask = get_rook_attacks(square, sides_occupancies[both]);
+    if (rook_mask & bitboards[(opposing_side == black) ? wR : bR]) return 1;
+
+    // Bishop attack
+    U64 bishop_mask = get_bishop_attacks(square, sides_occupancies[both]);
+    if (bishop_mask & bitboards[(opposing_side == black) ? wB : bB]) return 1;
+
+    // Queen attack
+    U64 queen_mask = get_queen_attacks(square, sides_occupancies[both]);
+    if (queen_mask & bitboards[(opposing_side == black) ? wQ : bQ]) return 1;
+
+    // King attack
+    U64 king_mask = king_attacks[square];
+    if (king_mask & bitboards[(opposing_side == black) ? wK : bK]) return 1;
+
+    return 0;
+}
+
+static inline U64 get_attacked_squares_by(int side) {
+    U64 attack_map = 0ULL;
+    for (int square = 0; square < 64; square++) {
+        if (is_square_attacked_by(square, side)) {
+            set_bit(attack_map, square);
+        }
+    }
+    return attack_map;
+}
+
+#define print_attacked_squares_by(side) (print_bitboard(((side) != both? get_attacked_squares_by((side)) : get_attacked_squares_by(white) | get_attacked_squares_by(black))))
+
+
 void init_magic_numbers() {
   for(int square = 0; square < 64; square++) {
     rook_magic_numbers[square] = find_magic_number(square, relevant_rook_count_bits[square], rook);
@@ -920,7 +962,9 @@ void init_default_board_position() {
   bitboards[wK] = 1152921504606846976ULL;
   bitboards[bK] = 16ULL;
 
-  set_sides_occupancies();
+  sides_occupancies[black] = 65535ULL;
+  sides_occupancies[white] = 18446462598732840960ULL;
+  sides_occupancies[both] = 18446462598732906495ULL;
 }
 
 void init_all() {
@@ -931,61 +975,13 @@ void init_all() {
   // init_magic_numbers();
 }
 
-static inline int is_square_attacked_by(int square, int side) {
-    int opposing_side = (side == white) ? black : white;
-
-    // Pawn attack
-    if (pawn_attacks[opposing_side][square] & bitboards[(opposing_side == black) ? wP : bP]) return 1;
-
-    // Knight attack
-    U64 knight_mask = knight_attacks[square];
-    if (knight_mask & bitboards[(opposing_side == black) ? wN : bN]) return 1;
-
-    // Rook attack
-    U64 rook_mask = get_rook_attacks(square, sides_occupancies[both]);
-    if (rook_mask & bitboards[(opposing_side == black) ? wR : bR]) return 1;
-
-    // Bishop attack
-    U64 bishop_mask = get_bishop_attacks(square, sides_occupancies[both]);
-    if (bishop_mask & bitboards[(opposing_side == black) ? wB : bB]) return 1;
-
-    // Queen attack
-    U64 queen_mask = get_queen_attacks(square, sides_occupancies[both]);
-    if (queen_mask & bitboards[(opposing_side == black) ? wQ : bQ]) return 1;
-
-    // King attack
-    U64 king_mask = king_attacks[square];
-    if (king_mask & bitboards[(opposing_side == black) ? wK : bK]) return 1;
-
-    return 0;
-}
-static inline U64 get_attacked_squares_by(int side) {
-    U64 attack_map = 0ULL;
-    for (int square = 0; square < 64; square++) {
-        if (is_square_attacked_by(square, side)) {
-            set_bit(attack_map, square);
-        }
-    }
-    return attack_map;
-}
-
-#define print_attacked_squares_by(side) (print_bitboard(((side) != both? get_attacked_squares_by((side)) : get_attacked_squares_by(white) | get_attacked_squares_by(black))))
-
 int main(void) {
     init_all();
 
-    parse_fen("8/8/8/3p4/4P3/8/8/8 w - -");
-    // parse_fen(start_position);
     print_board(1);
-
-    printf("\n\033[1;93mD5 %s  ", is_square_attacked_by(d5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
-    printf("\033[1;93mE5 %s  ", is_square_attacked_by(e5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
-    printf("\033[1;93mF5 %s  \033[0;0m\n\n", is_square_attacked_by(f5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
-
-    print_attacked_squares_by(both);
-
-    parse_fen(start_position);
-    print_attacked_squares_by(both);
+    print_bitboard(sides_occupancies[black]);
+    print_bitboard(sides_occupancies[white]);
+    print_bitboard(sides_occupancies[both]);
 
     return 0;
 }
