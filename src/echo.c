@@ -931,12 +931,55 @@ void init_all() {
   // init_magic_numbers();
 }
 
-int main(void) {
-  init_all();
+static inline int is_square_attacked_by(int square, int side) {
+    int opposing_side = (side == white) ? black : white;
 
-    parse_fen("8/8/8/3p4/4P3/8/8/8 w - -");
-    print_board(1);
+    // Pawn attack
+    if (pawn_attacks[opposing_side][square] & bitboards[(opposing_side == black) ? wP : bP]) return 1;
 
-  return 0;
+    // Knight attack
+    U64 knight_mask = knight_attacks[square];
+    if (knight_mask & bitboards[(opposing_side == black) ? wN : bN]) return 1;
+
+    // Rook attack
+    U64 rook_mask = get_rook_attacks(square, sides_occupancies[both]);
+    if (rook_mask & bitboards[(opposing_side == black) ? wR : bR]) return 1;
+
+    // Bishop attack
+    U64 bishop_mask = get_bishop_attacks(square, sides_occupancies[both]);
+    if (bishop_mask & bitboards[(opposing_side == black) ? wB : bB]) return 1;
+
+    // Queen attack
+    U64 queen_mask = get_queen_attacks(square, sides_occupancies[both]);
+    if (queen_mask & bitboards[(opposing_side == black) ? wQ : bQ]) return 1;
+
+    // King attack
+    U64 king_mask = king_attacks[square];
+    if (king_mask & bitboards[(opposing_side == black) ? wK : bK]) return 1;
+
+    return 0;
+}
+static inline U64 get_attacked_squares_by(int side) {
+    U64 attack_map = 0ULL;
+    for (int square = 0; square < 64; square++) {
+        if (is_square_attacked_by(square, side)) {
+            set_bit(attack_map, square);
+        }
+    }
+    return attack_map;
 }
 
+#define print_attacked_squares_by(side) (print_bitboard(get_attacked_squares_by((side))))
+
+int main(void) {
+    init_all();
+
+    parse_fen("8/8/8/3p4/4P3/8/8/8 w - -");
+    // parse_fen(start_position);
+    print_board(1);
+
+    printf("%s  ", is_square_attacked_by(d5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
+    printf("%s  ", is_square_attacked_by(e5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
+    printf("%s  \033[0;0m\n", is_square_attacked_by(f5, white)? "\033[1;96mTrue": "\033[1;91mFalse");
+    return 0;
+}
