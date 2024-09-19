@@ -871,6 +871,7 @@ static inline U64 get_queen_attacks(int square, U64 blockers) {
 }
 
 static inline int is_square_attacked_by(int square, int side) {
+    if (side == both) return is_square_attacked_by(square, white) + is_square_attacked_by(square, black);
     int opposing_side = (side == white) ? black : white;
 
     // Pawn attack
@@ -909,7 +910,7 @@ static inline U64 get_attacked_squares_by(int side) {
     return attack_map;
 }
 
-#define print_attacked_squares_by(side) (print_bitboard(((side) != both? get_attacked_squares_by((side)) : get_attacked_squares_by(white) | get_attacked_squares_by(black))))
+#define print_attacked_squares_by(side) (print_bitboard(get_attacked_squares_by((side))))
 
 
 void init_magic_numbers() {
@@ -978,10 +979,9 @@ void init_all() {
 int main(void) {
     init_all();
 
+    parse_fen(tricky_position);
     print_board(1);
-    print_bitboard(sides_occupancies[black]);
-    print_bitboard(sides_occupancies[white]);
-    print_bitboard(sides_occupancies[both]);
+    print_attacked_squares_by(both);
 
     return 0;
 }
