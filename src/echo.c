@@ -33,7 +33,9 @@ enum { rook, bishop };
 enum { wP, wN, wB, wR, wQ, wK, bP, bN, bB, bR, bQ, bK };
 enum { WCK = 1, WCQ = 2, BCK = 4, BCQ = 8};
 
-char *unicode_pieces[12] = {"♟︎", "♞", "♝", "♜", "♛", "♚","♙", "♘", "♗", "♖", "♕", "♔"};
+// switched black pieces to be used for white and same for black pieces
+// due to better visual appearance
+char *unicode_pieces[12] = {"♟", "♞", "♝", "♜", "♛", "♚","♙", "♘", "♗", "♖", "♕", "♔"};
 char ascii_pieces[12] = "PNBRQKpnbrqk";
 int decode_ascii_pieces[] = {
   ['P'] = wP,
@@ -148,60 +150,70 @@ void set_sides_occupancies() {
   sides_occupancies[black] = bitboards[bP] | bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ] | bitboards[bK];
   sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
 }
-void parse_fen (char *fen) {
-  reset_states_and_board();
+// order: 8/7/6/5/4/3/2/1 (top to bottom) | 12345678 (left to right) /12345678
+void parse_fen(char *fen) {
+    reset_states_and_board();
 
-  for (int rank = 0; rank < 8; rank++) {
-    for (int file = 0; file < 8; ) { // manual increment
-      int square = RF_2SQ(rank, file);
+    // Parse board position
+    for (int rank = 0; rank < 8; rank++) {
+        for (int file = 0; file < 8;) {
+            int square = RF_2SQ(rank, file);
 
-      if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z')) {
-        int piece = decode_ascii_pieces[*fen++];
-        set_bit(bitboards[piece], square);
-        file++;
-      }
-
-      else if (*fen >= '1' && *fen <= '8') {
-        int empty_squares = *fen++ - '0';
-        file += empty_squares;
-      }
-
-      else {
-        fen++;
-      }
+            if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z')) {
+                int piece = decode_ascii_pieces[*fen++];
+                set_bit(bitboards[piece], square);
+                file++;
+            } else if (*fen >= '1' && *fen <= '8') {
+                file += *fen++ - '0';
+            } else {
+                fen++;
+            }
+        }
     }
-  }
 
-  // set state variables
-  while(*fen == ' ') fen++;
-  if (*fen == 'w') side_to_move = white;
-  if (*fen == 'b') side_to_move = black;
-  fen++;
-  while(*fen == ' ') fen++;
-  if (*fen == '-') { can_castle = 0; fen++;}
-  else {
-    while(*fen != ' ') {
-      if(*fen == 'K') can_castle |= WCK;
-      if(*fen == 'Q') can_castle |= WCQ;
-      if(*fen == 'k') can_castle |= BCK;
-      if(*fen == 'q') can_castle |= BCQ;
-      fen++;
-    }
-  }
-  while(*fen == ' ') fen++;
-  if (*fen == '-') {
-    en_passant = no_square;
+    // Skip spaces
+    while (*fen == ' ') fen++;
+
+    // Parse side to move
+    side_to_move = (*fen == 'w') ? white : black;
     fen++;
-  } else {
-    char square_char[] = {*fen, *(fen+1)};
-    int square = char_to_square(square_char);
-    en_passant = square;
-    fen += 2;
-  }
-  // discard ply and move count for now
-  set_sides_occupancies();
-}
 
+    // Skip spaces
+    while (*fen == ' ') fen++;
+
+    // Parse castling rights
+    can_castle = 0;
+    if (*fen != '-') {
+        while (*fen != ' ') {
+            switch (*fen++) {
+                case 'K': can_castle |= WCK; break;
+                case 'Q': can_castle |= WCQ; break;
+                case 'k': can_castle |= BCK; break;
+                case 'q': can_castle |= BCQ; break;
+            }
+        }
+    } else {
+        fen++;
+    }
+
+    // Skip spaces
+    while (*fen == ' ') fen++;
+
+    // Parse en passant square
+    if (*fen == '-') {
+        en_passant = no_square;
+        fen++;
+    } else {
+        en_passant = char_to_square(fen);
+        fen += 2;
+    }
+
+    // Skip remaining FEN components (ply and move count)
+    while (*fen && *fen != ' ') fen++;
+
+    // Finalize board states
+    set_sides_occupancies();
+}
 
 
 // print bitboard
@@ -901,13 +913,14 @@ static inline int is_square_attacked_by(int square, int side) {
 }
 
 static inline U64 get_attacked_squares_by(int side) {
-    U64 attack_map = 0ULL;
-    for (int square = 0; square < 64; square++) {
-        if (is_square_attacked_by(square, side)) {
-            set_bit(attack_map, square);
-        }
-    }
-    return attack_map;
+  U64 attack_map = 0ULL;
+  for (int square = 0; square < 64; square += 4) {
+    if (is_square_attacked_by(square, side)) set_bit(attack_map, square);
+    if (is_square_attacked_by(square + 1, side)) set_bit(attack_map, square + 1);
+    if (is_square_attacked_by(square + 2, side)) set_bit(attack_map, square + 2);
+    if (is_square_attacked_by(square + 3, side)) set_bit(attack_map, square + 3);
+  }
+  return attack_map;
 }
 
 #define print_attacked_squares_by(side) (print_bitboard(get_attacked_squares_by((side))))
@@ -976,12 +989,11 @@ void init_all() {
   // init_magic_numbers();
 }
 
+
 int main(void) {
-    init_all();
+  init_all();
 
-    parse_fen(tricky_position);
-    print_board(1);
-    print_attacked_squares_by(both);
 
-    return 0;
+  return 0;
 }
+
