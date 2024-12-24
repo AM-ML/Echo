@@ -5,6 +5,7 @@ truth
 test
 echo
 *.exe
+*.pyc
 
 # Prerequisites
 *.d
