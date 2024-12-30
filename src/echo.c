@@ -93,32 +93,7 @@ int char_to_square(const char *square) {
 }
 
 
-/****************
-* 0 1 1 1 1 1 1 1
-* 0 1 1 1 1 1 1 1
-* 0 1 1 1 1 1 1 1
-* 0 1 1 1 1 1 1 1
-* 0 1 1 1 1 1 1 1
-* 0 1 1 1 1 1 1 1
-* 0 1 1 1 1 1 1 1
-* 0 1 1 1 1 1 1 1
-* _______________
-* A B C D E F G H
-*****************/
 const U64 not_A_file = 18374403900871474942ULL;
-
-/*
-* 1 1 1 1 1 1 1 0
-* 1 1 1 1 1 1 1 0
-* 1 1 1 1 1 1 1 0
-* 1 1 1 1 1 1 1 0
-* 1 1 1 1 1 1 1 0
-* 1 1 1 1 1 1 1 0
-* 1 1 1 1 1 1 1 0
-* 1 1 1 1 1 1 1 0
-  _______________
-  A B C D E F G H
- * */
 const U64 not_H_file = 9187201950435737471ULL;
 const U64 not_HG_file = 4557430888798830399ULL;
 const U64 not_AB_file = 18229723555195321596ULL;
@@ -981,6 +956,106 @@ void init_default_board_position() {
   sides_occupancies[both] = 18446462598732906495ULL;
 }
 
+#define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
+
+static inline void generate_moves() {
+  int src_sqr, dest_sqr;
+
+  U64 position, attacks; // current iteration's piece bitboard & its attacks map
+
+  for (int piece = wP; piece <= bK; piece++) {
+    position = bitboards[piece];
+
+
+    // generating pawn moves & castling move system
+    if (side_to_move != black) {
+      if (piece == wP) {
+        while (position) {
+          src_sqr = get_lsb_index(position);
+          dest_sqr = src_sqr - 8; // move up by 1 row
+
+          const char *src = square_to_notation[src_sqr];
+          const char *dest = square_to_notation[dest_sqr];
+
+
+          // quiet pawn moves
+          if (! (dest_sqr < a8) && !get_bit(sides_occupancies[both], dest_sqr)) {
+
+            if (src_sqr >= a7 && src_sqr <= h7) {
+              // 4 moves: promotion to q, r, b, n
+              ;INFO("wP promotion: %s-%sq", src, dest);
+              ;INFO("wP promotion: %s-%sr", src, dest);
+              ;INFO("wP promotion: %s-%sb", src, dest);
+              ;INFO("wP promotion: %s-%sn", src, dest);
+            }
+            else {
+
+              // pawn moves 2 squares
+              if ((src_sqr >= a2 && src_sqr <= h2)
+                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr - 8)) {
+                ;INFO("wP double push: %s-%s", src, square_to_notation[dest_sqr-8]);
+              } else {
+                // pawn moves 1 square
+                ;INFO("wP push: %s-%s", src, dest);
+              }
+
+            }
+          }
+
+          pop_bit(position, src_sqr);
+        }
+      }
+    }
+
+    else {
+      if (piece == bP) {
+        while (position) {
+          src_sqr = get_lsb_index(position);
+          dest_sqr = src_sqr + 8; // move up by 1 row
+
+          const char *src = square_to_notation[src_sqr];
+          const char *dest = square_to_notation[dest_sqr];
+
+
+          // quiet pawn moves
+          if (! (dest_sqr > h1) && !get_bit(sides_occupancies[both], dest_sqr)) {
+
+            if (src_sqr >= a2 && src_sqr <= h2) {
+              // 4 moves: promotion to q, r, b, n
+              ;INFO("wP promotion: %s-%sq", src, dest);
+              ;INFO("wP promotion: %s-%sr", src, dest);
+              ;INFO("wP promotion: %s-%sb", src, dest);
+              ;INFO("wP promotion: %s-%sn", src, dest);
+            }
+            else {
+
+              // pawn moves 2 squares
+              if ((src_sqr >= a7 && src_sqr <= h7)
+                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr + 8)) {
+                ;INFO("wP double push: %s-%s", src, square_to_notation[dest_sqr+8]);
+              } else {
+                // pawn moves 1 square
+                ;INFO("wP push: %s-%s", src, dest);
+              }
+
+            }
+          }
+
+          pop_bit(position, src_sqr);
+        }
+      }
+
+    }
+
+    // knight move gen
+    // bishop move gen
+    // rook move gen
+    // queen move gen
+    // king move gen
+  }
+}
+
+
 void init_all() {
   init_leaper_attacks();
   init_sliding_pieces(bishop);
@@ -993,6 +1068,17 @@ void init_all() {
 int main(void) {
   init_all();
 
+  parse_fen("8/2P13p/6p1/8/8/1P6/P4p2/8 w - -");
+  // parse_fen(tricky_position);
+  print_board(1);
+  printf("\n");
+
+  generate_moves();
+
+  printf("\n\n");
+  side_to_move = black;
+
+  generate_moves();
 
   return 0;
 }
