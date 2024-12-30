@@ -25,7 +25,6 @@ while true; do
 
     # Check if compilation succeeded
     if [[ $? -eq 0 ]]; then
-        echo -e "\033[1;96mCompilation: \033[1;93m${compile_time_ms}ms\033[0;0m..."
 
         # Measure runtime
         start2=$(date +%s%N)
@@ -34,6 +33,7 @@ while true; do
         runtime_ms=$(( (end2 - start2) / 1000000 ))
 
         echo "-------------------------"
+        echo -e "\033[1;96mCompilation: \033[1;93m${compile_time_ms}ms\033[0;0m..."
         echo -e "\033[1;94m----\033[1;96mRuntime: \033[1;93m${runtime_ms}ms\033[0;0m..."
         echo "-------------------------"
     else
