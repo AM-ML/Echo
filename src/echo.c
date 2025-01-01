@@ -968,7 +968,7 @@ static inline void generate_moves() {
 
 
     // generating pawn moves & castling move system
-    if (side_to_move != black) {
+    if (side_to_move == white) {
       if (piece == wP) {
         while (position) {
           src_sqr = get_lsb_index(position);
@@ -994,8 +994,9 @@ static inline void generate_moves() {
               if ((src_sqr >= a2 && src_sqr <= h2)
                 && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr - 8)) {
                 ;INFO("wP double push: %s-%s", src, square_to_notation[dest_sqr-8]);
-              } else {
-                // pawn moves 1 square
+              }
+              // pawn moves 1 square
+              if (!get_bit(sides_occupancies[both], dest_sqr)) {
                 ;INFO("wP push: %s-%s", src, dest);
               }
 
@@ -1081,8 +1082,9 @@ static inline void generate_moves() {
               if ((src_sqr >= a7 && src_sqr <= h7)
                 && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr + 8)) {
                 ;INFO("bP double push: %s-%s", src, square_to_notation[dest_sqr+8]);
-              } else {
-                // pawn moves 1 square
+              }
+              // pawn moves 1 square
+              if (!get_bit(sides_occupancies[both], dest_sqr)) {
                 ;INFO("bP push: %s-%s", src, dest);
               }
 
@@ -1145,10 +1147,138 @@ static inline void generate_moves() {
     }
 
     // knight move gen
+    if ((side_to_move == white)? piece == wN : piece == bN) {
+
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        const char *src = square_to_notation[src_sqr];
+
+        attacks = knight_attacks[src_sqr] & ~sides_occupancies[side_to_move];
+
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            ;INFO("knight move: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          else {
+            ;INFO("knight capture: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          pop_bit(attacks, dest_sqr);
+        }
+
+        pop_bit(position, src_sqr);
+      }
+    }
     // bishop move gen
+    if ((side_to_move == white)? piece == wB : piece == bB) {
+
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        const char *src = square_to_notation[src_sqr];
+
+        attacks = get_bishop_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
+
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            ;INFO("bishop move: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          else {
+            ;INFO("bishop capture: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          pop_bit(attacks, dest_sqr);
+        }
+
+        pop_bit(position, src_sqr);
+      }
+    }
     // rook move gen
+    if ((side_to_move == white)? piece == wR : piece == bR) {
+
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        const char *src = square_to_notation[src_sqr];
+
+        attacks = get_rook_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
+
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            ;INFO("rook move: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+          else {
+            ;INFO("rook capture: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          pop_bit(attacks, dest_sqr);
+        }
+
+        pop_bit(position, src_sqr);
+      }
+    }
     // queen move gen
+    if ((side_to_move == white)? piece == wQ : piece == bQ) {
+
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        const char *src = square_to_notation[src_sqr];
+
+        attacks = get_queen_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
+
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            ;INFO("queen move: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          else {
+            ;INFO("queen capture: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          pop_bit(attacks, dest_sqr);
+        }
+
+        pop_bit(position, src_sqr);
+      }
+    }
     // king move gen
+    if ((side_to_move == white)? piece == wK : piece == bK) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        const char *src = square_to_notation[src_sqr];
+
+        attacks = king_attacks[src_sqr] & ~sides_occupancies[side_to_move];
+
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            ;INFO("king move: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          else {
+            ;INFO("king capture: %s-%s", src, square_to_notation[dest_sqr]);
+          }
+
+          pop_bit(attacks, dest_sqr);
+        }
+
+        pop_bit(position, src_sqr);
+      }
+    }
   }
 }
 
@@ -1165,9 +1295,11 @@ void init_all() {
 int main(void) {
   init_all();
 
-  // parse_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - ");
-  parse_fen("r3kb1r/pppppppp/8/8/8/5b2/PPPP1PPP/R3K2R w KQkq - ");
+  // parse_fen("8/8/3N4/8/8/8/8/8 w - -"); // knight test
+  // parse_fen("8/2111r2/2r113/3B4/2R5/8/8/8 w - -"); // bishop test
+  // parse_fen("4k3/8/8/4RK2/8/8/8/8 w - - "); // rook test
 
+  parse_fen(tricky_position);
   print_board(1);
 
   generate_moves();
@@ -1179,4 +1311,3 @@ int main(void) {
 
   return 0;
 }
-
