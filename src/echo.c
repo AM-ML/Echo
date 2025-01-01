@@ -1283,6 +1283,24 @@ static inline void generate_moves() {
 }
 
 
+/* --- 48 bits / 6 bytes --- Encoded Move-List Item Structure
+ *
+ *           BINARY                                hexadecimal
+  0000 0000 0000 0000 0011 1111 source square      0x3f
+  0000 0000 0000 1111 1100 0000 target square      0xfc0
+  0000 0000 1111 0000 0000 0000 piece              0xf000
+  0000 1111 0000 0000 0000 0000 promoted piece     0xf0000
+  0001 0000 0000 0000 0000 0000 capture flag       0x100000
+  0010 0000 0000 0000 0000 0000 double push flag   0x200000
+  0100 0000 0000 0000 0000 0000 enpassant flag     0x400000
+  1000 0000 0000 0000 0000 0000 castling flag      0x800000
+*/
+
+/* example: target square = h1 (63 in enum)
+ * Move move = 0;
+ * move |= 63 << 6;
+ * */
+
 void init_all() {
   init_leaper_attacks();
   init_sliding_pieces(bishop);
@@ -1295,19 +1313,15 @@ void init_all() {
 int main(void) {
   init_all();
 
-  // parse_fen("8/8/3N4/8/8/8/8/8 w - -"); // knight test
-  // parse_fen("8/2111r2/2r113/3B4/2R5/8/8/8 w - -"); // bishop test
-  // parse_fen("4k3/8/8/4RK2/8/8/8/8 w - - "); // rook test
+  unsigned long long move = 0ULL;
 
-  parse_fen(tricky_position);
-  print_board(1);
+  move |= 63 << 6; // encoding target square h1
+  print_bitboard(move);
 
-  generate_moves();
+  int target_square = (move & 0xfc0) >> 6; // decoding target square;
+  print_bitboard(1ULL << target_square);
+  INFO("target square: %s (%llu)", square_to_notation[target_square], move);
 
-  printf("\n\n");
-  side_to_move = black;
-
-  generate_moves();
 
   return 0;
 }
