@@ -1002,6 +1002,32 @@ static inline void generate_moves() {
             }
           }
 
+          attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
+
+          while (attacks) {
+            dest_sqr = get_lsb_index(attacks);
+
+            // pawn capture promotion move
+            if (src_sqr >= a7 && src_sqr <= h7) {
+              ;INFO("wP capture promotion: %s-%s", src, square_to_notation[dest_sqr]);
+            }
+            // pawn capture move
+            else {
+              ;INFO("wP capture: %s-%s", src, square_to_notation[dest_sqr]);
+            }
+
+            pop_bit(attacks, dest_sqr);
+          }
+
+          if (en_passant != no_square) {
+            U64 can_en_passant = pawn_attacks[white][src_sqr] & (1ULL << en_passant);
+
+            // get_bit() for ensurance
+            if (can_en_passant && get_bit(bitboards[bP], en_passant + 8)) {
+              ;INFO("wP en passant: %s-%s", src, square_to_notation[en_passant]);
+            }
+          }
+
           pop_bit(position, src_sqr);
         }
       }
@@ -1022,22 +1048,49 @@ static inline void generate_moves() {
 
             if (src_sqr >= a2 && src_sqr <= h2) {
               // 4 moves: promotion to q, r, b, n
-              ;INFO("wP promotion: %s-%sq", src, dest);
-              ;INFO("wP promotion: %s-%sr", src, dest);
-              ;INFO("wP promotion: %s-%sb", src, dest);
-              ;INFO("wP promotion: %s-%sn", src, dest);
+              ;INFO("bP promotion: %s-%sq", src, dest);
+              ;INFO("bP promotion: %s-%sr", src, dest);
+              ;INFO("bP promotion: %s-%sb", src, dest);
+              ;INFO("bP promotion: %s-%sn", src, dest);
             }
             else {
 
               // pawn moves 2 squares
               if ((src_sqr >= a7 && src_sqr <= h7)
                 && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr + 8)) {
-                ;INFO("wP double push: %s-%s", src, square_to_notation[dest_sqr+8]);
+                ;INFO("bP double push: %s-%s", src, square_to_notation[dest_sqr+8]);
               } else {
                 // pawn moves 1 square
-                ;INFO("wP push: %s-%s", src, dest);
+                ;INFO("bP push: %s-%s", src, dest);
               }
 
+            }
+          }
+
+          attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
+
+          while(attacks) {
+            dest_sqr = get_lsb_index(attacks);
+
+
+            // pawn capture promotion move
+            if (src_sqr >= a2 && src_sqr <= h2) {
+              ;INFO("bP capture promotion: %s-%s", src, square_to_notation[dest_sqr]);
+            }
+            // pawn capture move
+            else {
+              ;INFO("bP capture: %s-%s", src, square_to_notation[dest_sqr]);
+            }
+
+            pop_bit(attacks, dest_sqr);
+          }
+
+          if (en_passant != no_square) {
+            U64 can_en_passant = pawn_attacks[black][src_sqr] & (1ULL << en_passant);
+
+            // get_bit() for ensurance
+            if (can_en_passant && get_bit(bitboards[wP], en_passant - 8)) {
+              ;INFO("bP en passant: %s-%s", src, square_to_notation[en_passant]);
             }
           }
 
@@ -1068,10 +1121,13 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen("8/2P13p/6p1/8/8/1P6/P4p2/8 w - -");
-  // parse_fen(tricky_position);
+  // parse_fen("8/8/8/pP6/8/8/8/8 w - -");
+  // en_passant = a6;
+
+  parse_fen("8/8/8/8/Pp6/8/8/8 w - -");
+  en_passant = a3;
+
   print_board(1);
-  printf("\n");
 
   generate_moves();
 
