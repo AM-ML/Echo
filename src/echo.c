@@ -1031,6 +1031,28 @@ static inline void generate_moves() {
           pop_bit(position, src_sqr);
         }
       }
+
+      if (piece == wK) {
+        // kingside castling
+        if (can_castle & WCK) { // can_castle (1111) & WCK (0001) = true | ___0 & 1 = false
+          if (!get_bit(sides_occupancies[both], f1) && !get_bit(sides_occupancies[both], g1)) {
+            if (!is_square_attacked_by(e1, black) && !is_square_attacked_by(f1, black) && !is_square_attacked_by(g1, black)) {
+              ;INFO("WCK; e1-%s", "g1");
+
+            }
+          }
+        }
+
+        // queenside castling
+        if (can_castle & WCQ) {
+          if (!get_bit(sides_occupancies[both], d1) && !get_bit(sides_occupancies[both], c1) && !get_bit(sides_occupancies[both], b1)) {
+            if (!is_square_attacked_by(e1, black) && !is_square_attacked_by(d1, black) && !is_square_attacked_by(c1, black)) {
+              ;INFO("WCQ: e1-%s", "c1");
+            }
+          }
+        }
+
+      }
     }
 
     else {
@@ -1098,6 +1120,28 @@ static inline void generate_moves() {
         }
       }
 
+      if (piece == bK) {
+        // kingside castling
+        if (can_castle & BCK) { // can_castle (1111) & BCK (0001) = true | ___0 & 1 = false
+          if (!get_bit(sides_occupancies[both], f8) && !get_bit(sides_occupancies[both], g8)) {
+            if (!is_square_attacked_by(e8, white) && !is_square_attacked_by(f8, white) && !is_square_attacked_by(g8, white)) {
+              ;INFO("BCK; e8-%s", "g8");
+
+            }
+          }
+        }
+
+        // queenside castling
+        if (can_castle & BCQ) {
+          if (!get_bit(sides_occupancies[both], d8) && !get_bit(sides_occupancies[both], c8) && !get_bit(sides_occupancies[both], b8)) {
+            if (!is_square_attacked_by(e8, white) && !is_square_attacked_by(d8, white) && !is_square_attacked_by(c8, white)) {
+              ;INFO("BCQ: e8-%s", "c8");
+            }
+          }
+        }
+
+      }
+
     }
 
     // knight move gen
@@ -1121,11 +1165,8 @@ void init_all() {
 int main(void) {
   init_all();
 
-  // parse_fen("8/8/8/pP6/8/8/8/8 w - -");
-  // en_passant = a6;
-
-  parse_fen("8/8/8/8/Pp6/8/8/8 w - -");
-  en_passant = a3;
+  // parse_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - ");
+  parse_fen("r3kb1r/pppppppp/8/8/8/5b2/PPPP1PPP/R3K2R w KQkq - ");
 
   print_board(1);
 
