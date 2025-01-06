@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+
+#define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
+#define out(output) (printf(#output "\n"))
 
 // define bitboard data type
 #define U64 unsigned long long
@@ -932,266 +936,6 @@ void automate_occupancy(U64 mask) {
 
 
 
-#define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
-#define out(output) (printf(#output "\n"))
-
-static inline void generate_moves() {
-  int src_sqr, dest_sqr;
-  U64 position, attacks; // current iteration's piece bitboard & its attacks map
-
-  for (int piece = wP; piece <= bK; piece++) {
-    position = bitboards[piece];
-
-    // generating pawn moves & castling move system
-    if (side_to_move == white) {
-      if (piece == wP) {
-        while (position) {
-          src_sqr = get_lsb_index(position);
-          dest_sqr = src_sqr - 8; // move up by 1 row
-          const char *src = square_to_notation[src_sqr];
-          const char *dest = square_to_notation[dest_sqr];
-
-          // quiet pawn moves
-          if (! (dest_sqr < a8) && !get_bit(sides_occupancies[both], dest_sqr)) {
-
-            if (src_sqr >= a7 && src_sqr <= h7) {
-              // 4 moves: promotion to q, r, b, n
-              ;INFO("wP promotion: %s-%sq", src, dest);
-              ;INFO("wP promotion: %s-%sr", src, dest);
-              ;INFO("wP promotion: %s-%sb", src, dest);
-              ;INFO("wP promotion: %s-%sn", src, dest);
-            }
-            else {
-              // pawn moves 2 squares
-              if ((src_sqr >= a2 && src_sqr <= h2)
-                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr - 8)) {
-                ;INFO("wP double push: %s-%s", src, square_to_notation[dest_sqr-8]);
-              }
-              // pawn moves 1 square
-              if (!get_bit(sides_occupancies[both], dest_sqr)) {
-                ;INFO("wP push: %s-%s", src, dest);
-              }
-            }
-          }
-
-          attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
-          while (attacks) {
-            dest_sqr = get_lsb_index(attacks);
-            // pawn capture promotion move
-            if (src_sqr >= a7 && src_sqr <= h7) {
-              ;INFO("wP capture promotion: %s-%s", src, square_to_notation[dest_sqr]);
-            }
-            // pawn capture move
-            else {
-              ;INFO("wP capture: %s-%s", src, square_to_notation[dest_sqr]);
-            }
-            pop_bit(attacks, dest_sqr);
-          }
-
-          if (en_passant != no_square) {
-            U64 can_en_passant = pawn_attacks[white][src_sqr] & (1ULL << en_passant);
-
-            // get_bit() for ensurance
-            if (can_en_passant && get_bit(bitboards[bP], en_passant + 8)) {
-              ;INFO("wP en passant: %s-%s", src, square_to_notation[en_passant]);
-            }
-          }
-          pop_bit(position, src_sqr);
-        }
-      }
-
-      if (piece == wK) {
-        // kingside castling
-        if (can_castle & WCK) { // can_castle (1111) & WCK (0001) = true | ___0 & 1 = false
-          if (!get_bit(sides_occupancies[both], f1) && !get_bit(sides_occupancies[both], g1)) {
-            if (!is_square_attacked_by(e1, black) && !is_square_attacked_by(f1, black) && !is_square_attacked_by(g1, black)) {
-              ;INFO("WCK; e1-%s", "g1");
-            }
-          }
-        }
-
-        // queenside castling
-        if (can_castle & WCQ) {
-          if (!get_bit(sides_occupancies[both], d1) && !get_bit(sides_occupancies[both], c1) && !get_bit(sides_occupancies[both], b1)) {
-            if (!is_square_attacked_by(e1, black) && !is_square_attacked_by(d1, black) && !is_square_attacked_by(c1, black)) {
-              ;INFO("WCQ: e1-%s", "c1");
-            }
-          }
-        }
-      }
-    }
-    else {
-      if (piece == bP) {
-        while (position) {
-          src_sqr = get_lsb_index(position);
-          dest_sqr = src_sqr + 8; // move up by 1 row
-          const char *src = square_to_notation[src_sqr];
-          const char *dest = square_to_notation[dest_sqr];
-          // quiet pawn moves
-          if (! (dest_sqr > h1) && !get_bit(sides_occupancies[both], dest_sqr)) {
-            if (src_sqr >= a2 && src_sqr <= h2) {
-              // 4 moves: promotion to q, r, b, n
-              ;INFO("bP promotion: %s-%sq", src, dest);
-              ;INFO("bP promotion: %s-%sr", src, dest);
-              ;INFO("bP promotion: %s-%sb", src, dest);
-              ;INFO("bP promotion: %s-%sn", src, dest);
-            }
-            else {
-              // pawn moves 2 squares
-              if ((src_sqr >= a7 && src_sqr <= h7)
-                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr + 8)) {
-                ;INFO("bP double push: %s-%s", src, square_to_notation[dest_sqr+8]);
-              }
-              // pawn moves 1 square
-              if (!get_bit(sides_occupancies[both], dest_sqr)) {
-                ;INFO("bP push: %s-%s", src, dest);
-              }
-            }
-          }
-          attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
-          while(attacks) {
-            dest_sqr = get_lsb_index(attacks);
-            // pawn capture promotion move
-            if (src_sqr >= a2 && src_sqr <= h2) {
-              ;INFO("bP capture promotion: %s-%s", src, square_to_notation[dest_sqr]);
-            }
-            // pawn capture move
-            else {
-              ;INFO("bP capture: %s-%s", src, square_to_notation[dest_sqr]);
-            }
-            pop_bit(attacks, dest_sqr);
-          }
-          if (en_passant != no_square) {
-            U64 can_en_passant = pawn_attacks[black][src_sqr] & (1ULL << en_passant);
-            // get_bit() for ensurance
-            if (can_en_passant && get_bit(bitboards[wP], en_passant - 8)) {
-              ;INFO("bP en passant: %s-%s", src, square_to_notation[en_passant]);
-            }
-          }
-          pop_bit(position, src_sqr);
-        }
-      }
-      if (piece == bK) {
-        // kingside castling
-        if (can_castle & BCK) { // can_castle (1111) & BCK (0001) = true | ___0 & 1 = false
-          if (!get_bit(sides_occupancies[both], f8) && !get_bit(sides_occupancies[both], g8)) {
-            if (!is_square_attacked_by(e8, white) && !is_square_attacked_by(f8, white) && !is_square_attacked_by(g8, white)) {
-              ;INFO("BCK; e8-%s", "g8");
-            }
-          }
-        }
-        // queenside castling
-        if (can_castle & BCQ) {
-          if (!get_bit(sides_occupancies[both], d8) && !get_bit(sides_occupancies[both], c8) && !get_bit(sides_occupancies[both], b8)) {
-            if (!is_square_attacked_by(e8, white) && !is_square_attacked_by(d8, white) && !is_square_attacked_by(c8, white)) {
-              ;INFO("BCQ: e8-%s", "c8");
-            }
-          }
-        }
-      }
-    }
-    // knight move gen
-    if ((side_to_move == white)? piece == wN : piece == bN) {
-      while (position) {
-        src_sqr = get_lsb_index(position);
-        const char *src = square_to_notation[src_sqr];
-        attacks = knight_attacks[src_sqr] & ~sides_occupancies[side_to_move];
-        while (attacks) {
-          dest_sqr = get_lsb_index(attacks);
-          // quiet move
-          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
-            ;INFO("knight move: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          else {
-            ;INFO("knight capture: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          pop_bit(attacks, dest_sqr);
-        }
-        pop_bit(position, src_sqr);
-      }
-    }
-    // bishop move gen
-    if ((side_to_move == white)? piece == wB : piece == bB) {
-      while (position) {
-        src_sqr = get_lsb_index(position);
-        const char *src = square_to_notation[src_sqr];
-        attacks = get_bishop_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
-        while (attacks) {
-          dest_sqr = get_lsb_index(attacks);
-          // quiet move
-          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
-            ;INFO("bishop move: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          else {
-            ;INFO("bishop capture: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          pop_bit(attacks, dest_sqr);
-        }
-        pop_bit(position, src_sqr);
-      }
-    }
-    // rook move gen
-    if ((side_to_move == white)? piece == wR : piece == bR) {
-      while (position) {
-        src_sqr = get_lsb_index(position);
-        const char *src = square_to_notation[src_sqr];
-        attacks = get_rook_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
-        while (attacks) {
-          dest_sqr = get_lsb_index(attacks);
-          // quiet move
-          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
-            ;INFO("rook move: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          else {
-            ;INFO("rook capture: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          pop_bit(attacks, dest_sqr);
-        }
-        pop_bit(position, src_sqr);
-      }
-    }
-    // queen move gen
-    if ((side_to_move == white)? piece == wQ : piece == bQ) {
-      while (position) {
-        src_sqr = get_lsb_index(position);
-        const char *src = square_to_notation[src_sqr];
-        attacks = get_queen_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
-        while (attacks) {
-          dest_sqr = get_lsb_index(attacks);
-          // quiet move
-          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
-            ;INFO("queen move: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          else {
-            ;INFO("queen capture: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          pop_bit(attacks, dest_sqr);
-        }
-        pop_bit(position, src_sqr);
-      }
-    }
-    // king move gen
-    if ((side_to_move == white)? piece == wK : piece == bK) {
-      while (position) {
-        src_sqr = get_lsb_index(position);
-        const char *src = square_to_notation[src_sqr];
-        attacks = king_attacks[src_sqr] & ~sides_occupancies[side_to_move];
-        while (attacks) {
-          dest_sqr = get_lsb_index(attacks);
-          // quiet move
-          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
-            ;INFO("king move: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          else {
-            ;INFO("king capture: %s-%s", src, square_to_notation[dest_sqr]);
-          }
-          pop_bit(attacks, dest_sqr);
-        }
-        pop_bit(position, src_sqr);
-      }
-    }
-  }
-}
 
 
 /* --- 24 bits / 3 bytes ---    Encoded Move-List Item Structure
@@ -1230,7 +974,7 @@ static inline void generate_moves() {
 
 
 // --- move output debugging function
-#define print_move(move) INFO("Source Square: %s", square_to_notation[get_move_source(move)]); \
+#define print_move_info(move) INFO("Source Square: %s", square_to_notation[get_move_source(move)]); \
   INFO("Target Square: %s", square_to_notation[get_move_target(move)]); \
   INFO("Piece: %c", ascii_pieces[get_move_piece(move)]); \
   INFO("Promoted Piece: %c%s", ascii_pieces[get_move_promoted_piece(move)], get_move_promoted_piece(move) == 0 ? " or N/A" : ""); \
@@ -1238,6 +982,343 @@ static inline void generate_moves() {
   INFO("Capture: %d", get_move_capture_flag(move)?1:0); \
   INFO("En Passant: %d", get_move_en_passant_flag(move)?1:0); \
   INFO("Double Pawn Push: %d", get_move_double_push_flag(move)?1:0);
+
+typedef struct {
+  int moves[256]; // theoretical move limit: 255
+
+  int count;
+} Moves;
+
+
+static inline void add_move(Moves* move_list, int move) {
+  move_list -> moves[move_list -> count++] = move;
+}
+
+char ascii_promoted_pieces[] = {
+  [0]  = '\0', // get_move_promoted_piece = '0000' or 'wP' ? (illegal) => print '\0'
+  [wQ] = 'q',
+  [wR] = 'r',
+  [wB] = 'b',
+  [wN] = 'n',
+  [bQ] = 'q',
+  [bR] = 'r',
+  [bB] = 'b',
+  [bN] = 'n'
+};
+
+// for UCI purposes
+static inline void print_move(int move) {
+  printf("%s-%s%c\n", square_to_notation[get_move_source(move)],
+      square_to_notation[get_move_target(move)],
+      ascii_promoted_pieces[get_move_promoted_piece(move)]);
+}
+// for debugging purposes
+static inline void print_move_list(Moves* move_list) {
+  printf("\n");
+
+  if(!move_list -> count) out("No moves in the list.");
+
+  else {
+    for(int i = 0; i < move_list -> count; i++) {
+      int move = move_list -> moves[i];
+
+      char* capture = get_move_capture_flag(move)? "capture   " : "\0";
+      char* castling_f = get_move_castling_flag(move)? "castle   " : "\0";
+      char* en_passant_f = get_move_en_passant_flag(move)? "en_passant   ": "\0";
+      char* double_push = get_move_double_push_flag(move)? "double push   ": "\0";
+      char* out = malloc(sizeof(capture) + sizeof(castling_f) + sizeof(en_passant_f) + sizeof(double_push));
+
+      strcpy(out, capture);
+      strcat(out, castling_f);
+      strcat(out, en_passant_f);
+      strcat(out, double_push);
+
+      printf("%c %s-%s%c\t%s\n", ascii_pieces[get_move_piece(move)], square_to_notation[get_move_source(move)],
+             square_to_notation[get_move_target(move)],
+             ascii_promoted_pieces[get_move_promoted_piece(move)], out);
+    }
+
+
+    printf("\n\033[1;94mMoves: \033[1;93m%d\033[0;0m\n\n", move_list -> count);
+  }
+}
+
+
+// generate moves function
+
+static inline void generate_moves(Moves* moves_list) {
+  moves_list -> count = 0;
+  int src_sqr, dest_sqr;
+  U64 position, attacks; // current iteration's piece bitboard & its attacks map
+
+  for (int piece = wP; piece <= bK; piece++) {
+    position = bitboards[piece];
+
+    // generating pawn moves & castling move system
+    if (side_to_move == white) {
+      if (piece == wP) {
+        while (position) {
+          src_sqr = get_lsb_index(position);
+          dest_sqr = src_sqr - 8; // move up by 1 row
+
+          // quiet pawn moves
+          if (! (dest_sqr < a8) && !get_bit(sides_occupancies[both], dest_sqr)) {
+
+            if (src_sqr >= a7 && src_sqr <= h7) {
+              // 4 moves: promotion to q, r, b, n
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wQ, 0, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wR, 0, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wB, 0, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wN, 0, 0, 0, 0));
+            }
+            else {
+              // pawn moves 2 squares
+              if ((src_sqr >= a2 && src_sqr <= h2)
+                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr - 8)) {
+                add_move(moves_list, encode_move(src_sqr, dest_sqr - 8, wP, 0, 0, 1, 0, 0));
+              }
+              // pawn moves 1 square
+              if (!get_bit(sides_occupancies[both], dest_sqr)) {
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, 0, 0, 0, 0, 0));
+              }
+            }
+          }
+
+          attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
+          while (attacks) {
+            dest_sqr = get_lsb_index(attacks);
+            // pawn capture promotion move
+            if (src_sqr >= a7 && src_sqr <= h7) {
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wQ, 1, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wR, 1, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wB, 1, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wN, 1, 0, 0, 0));
+            }
+            // pawn capture move
+            else {
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, 0, 1, 0, 0, 0));
+            }
+            pop_bit(attacks, dest_sqr);
+          }
+
+          if (en_passant != no_square) {
+            U64 can_en_passant = pawn_attacks[white][src_sqr] & (1ULL << en_passant);
+
+            // get_bit() for ensurance
+            if (can_en_passant && get_bit(bitboards[bP], en_passant + 8)) {
+              // en passant capture
+              add_move(moves_list, encode_move(src_sqr, en_passant, wP, 0, 1, 0, 1, 0));
+            }
+          }
+          pop_bit(position, src_sqr);
+        }
+      }
+
+      if (piece == wK) {
+        // kingside castling
+        if (can_castle & WCK) { // can_castle (1111) & WCK (0001) = true | ___0 & 1 = false
+          if (!get_bit(sides_occupancies[both], f1) && !get_bit(sides_occupancies[both], g1)) {
+            if (!is_square_attacked_by(e1, black) && !is_square_attacked_by(f1, black) && !is_square_attacked_by(g1, black)) {
+              add_move(moves_list, encode_move(e1, g1, wK, 0, 0, 0, 0, 1));
+            }
+          }
+        }
+
+        // queenside castling
+        if (can_castle & WCQ) {
+          if (!get_bit(sides_occupancies[both], d1) && !get_bit(sides_occupancies[both], c1) && !get_bit(sides_occupancies[both], b1)) {
+            if (!is_square_attacked_by(e1, black) && !is_square_attacked_by(d1, black) && !is_square_attacked_by(c1, black)) {
+              add_move(moves_list, encode_move(e1, c1, wK, 0, 0, 0, 0, 1));
+            }
+          }
+        }
+      }
+    }
+    else {
+      if (piece == bP) {
+        while (position) {
+          src_sqr = get_lsb_index(position);
+          dest_sqr = src_sqr + 8; // move up by 1 row
+          // quiet pawn moves
+          if (! (dest_sqr > h1) && !get_bit(sides_occupancies[both], dest_sqr)) {
+            if (src_sqr >= a2 && src_sqr <= h2) {
+              // 4 moves: promotion to q, r, b, n
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bQ, 0, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bR, 0, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bB, 0, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bN, 0, 0, 0, 0));
+            }
+            else {
+              // pawn moves 2 squares
+              if ((src_sqr >= a7 && src_sqr <= h7)
+                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr + 8)) {
+                add_move(moves_list, encode_move(src_sqr, dest_sqr+8, bP, 0, 0, 1, 0, 0));
+              }
+              // pawn moves 1 square
+              if (!get_bit(sides_occupancies[both], dest_sqr)) {
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, 0, 0, 0, 0, 0));
+              }
+            }
+          }
+          attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
+          while(attacks) {
+            dest_sqr = get_lsb_index(attacks);
+            // pawn capture promotion move
+            if (src_sqr >= a2 && src_sqr <= h2) {
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bQ, 1, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bR, 1, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bB, 1, 0, 0, 0));
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bN, 1, 0, 0, 0));
+            }
+            // pawn capture move
+            else {
+              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, 0, 1, 0, 0, 0));
+            }
+            pop_bit(attacks, dest_sqr);
+          }
+          if (en_passant != no_square) {
+            U64 can_en_passant = pawn_attacks[black][src_sqr] & (1ULL << en_passant);
+            // get_bit() for ensurance
+            if (can_en_passant && get_bit(bitboards[wP], en_passant - 8)) {
+              add_move(moves_list, encode_move(src_sqr, en_passant, bP, 0, 0, 0, 1, 0));
+            }
+          }
+          pop_bit(position, src_sqr);
+        }
+      }
+      if (piece == bK) {
+        // kingside castling
+        if (can_castle & BCK) { // can_castle (1111) & BCK (0001) = true | ___0 & 1 = false
+          if (!get_bit(sides_occupancies[both], f8) && !get_bit(sides_occupancies[both], g8)) {
+            if (!is_square_attacked_by(e8, white) && !is_square_attacked_by(f8, white) && !is_square_attacked_by(g8, white)) {
+              add_move(moves_list, encode_move(e8, g8, bK, 0, 0, 0, 0, 1));
+            }
+          }
+        }
+        // queenside castling
+        if (can_castle & BCQ) {
+          if (!get_bit(sides_occupancies[both], d8) && !get_bit(sides_occupancies[both], c8) && !get_bit(sides_occupancies[both], b8)) {
+            if (!is_square_attacked_by(e8, white) && !is_square_attacked_by(d8, white) && !is_square_attacked_by(c8, white)) {
+              add_move(moves_list, encode_move(e8, c8, bK, 0, 0, 0, 0, 1));
+            }
+          }
+        }
+      }
+    }
+    // knight move gen
+    if ((side_to_move == white)? piece == wN : piece == bN) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        attacks = knight_attacks[src_sqr] & ~sides_occupancies[side_to_move];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 0, 0, 0, 0));
+          }
+          else {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          }
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+    // bishop move gen
+    if ((side_to_move == white)? piece == wB : piece == bB) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        attacks = get_bishop_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 0, 0, 0, 0));
+          }
+          else {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          }
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+    // rook move gen
+    if ((side_to_move == white)? piece == wR : piece == bR) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        attacks = get_rook_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 0, 0, 0, 0));
+          }
+          else {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          }
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+    // queen move gen
+    if ((side_to_move == white)? piece == wQ : piece == bQ) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        attacks = get_queen_attacks(src_sqr, sides_occupancies[both]) & ~sides_occupancies[side_to_move];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 0, 0, 0, 0));
+          }
+          else {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          }
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+    // king move gen
+    if ((side_to_move == white)? piece == wK : piece == bK) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        attacks = king_attacks[src_sqr] & ~sides_occupancies[side_to_move];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          // quiet move
+          if(!get_bit(sides_occupancies[side_to_move==white? black : white], dest_sqr)) {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 0, 0, 0, 0));
+          }
+          else {
+            add_move(moves_list, encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          }
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+  }
+}
+
+
+#define COPY_BOARD() \
+  U64 bitboards_copy[12], sides_occupancies_copy[3];                                            \
+  int side_to_move_copy, en_passant_copy, can_castle_copy;                                      \
+  memcpy(bitboards_copy, bitboards, 96);                                                        \
+  memcpy(sides_occupancies_copy, sides_occupancies, 24);                                        \
+  side_to_move_copy = side_to_move, en_passant_copy = en_passant, can_castle_copy = can_castle;
+
+
+#define RESTORE_BOARD()                                                                         \
+  memcpy(bitboards, bitboards_copy, 96);                                                        \
+  memcpy(sides_occupancies, sides_occupancies_copy, 24);                                        \
+  side_to_move = side_to_move_copy, en_passant = en_passant_copy, can_castle = can_castle_copy;
+
+
+
 
 /***** MAIN FUNCTION *****/
 
@@ -1274,18 +1355,26 @@ void init_all() {
 }
 
 
-
 int main(void) {
   init_all();
 
-  unsigned int move = encode_move(e2, e4, wP, 0, 0, 1, 0, 0);
+  Moves *move_list = malloc(sizeof(Moves)); // move_list[1] == *move_list[0] == *move_list
+  move_list -> count = 0;
 
-  print_bitboard(move);
-  print_move(move);
+  parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq a3 0 1");
+  print_board(1);
 
-  move = encode_move(e7, d8, wP, wQ, 1, 0, 0, 0);
-  print_bitboard(move);
-  print_move(move);
+  COPY_BOARD();
+
+  parse_fen(start_position);
+  print_board(1);
+
+  parse_fen(empty_board);
+  print_board(1);
+
+  RESTORE_BOARD();
+
+  print_board(1);
 
   return 0;
 }
