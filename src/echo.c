@@ -247,6 +247,25 @@ void print_bitboard(U64 bitboard) {
   #endif
 }
 
+void print_sides_occupancies() {
+  printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", sides_occupancies[both]);
+
+  for (int rank = 0; rank < 8; rank++) {
+    printf("\033[1;93m%d|  \033[0;0m", 8-rank);
+    for (int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
+      if (get_bit(sides_occupancies[white], square)) {
+        printf("\033[1;94m1 ");
+      } else if (get_bit(sides_occupancies[black], square)) {
+        printf("\033[1;91m2 ");
+      } else { printf("\033[1;96m0 "); }
+    }
+    printf("\n");
+  }
+  printf("    \033[1;93m_______________\n");
+  printf("    A B C D E F G H\033[0;0m\n");
+}
+
 void print_bitboard_piece(int piece_square, U64 bitboard) {
 #if defined(_WIN32) || defined(_WIN64)
   printf("\nPosition: %llu\n", bitboard);
@@ -1348,6 +1367,19 @@ static inline int make_move(int move, int move_flag) {
     set_bit(bitboards[piece], target_sqr);
     set_bit(sides_occupancies[both], target_sqr);
     set_bit(sides_occupancies[side_to_move], target_sqr);
+
+    if(capture_flag) {
+      int start_piece = side_to_move == white? bP:wP, end_piece = side_to_move == white? bK:wK;
+
+      for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
+        if (get_bit(bitboards[bb_piece], target_sqr)) {
+          pop_bit(bitboards[bb_piece], target_sqr);
+          pop_bit(sides_occupancies[side_to_move == white? black : white], target_sqr);
+
+          break;
+        }
+      }
+    }
   }
 
   // capture moves
@@ -1415,11 +1447,10 @@ int main(void) {
 
     make_move(move, allow_all_moves);
     print_board(1);
+    print_sides_occupancies();
     getchar(); // pause between each move.
 
     RESTORE_BOARD();
-    print_board(1);
-    getchar();
   }
 
   return 0;
