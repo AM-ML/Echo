@@ -116,8 +116,8 @@ const U64 not_rank_8 = 18446744073709551360ULL;
 #define get_lsb_index(bitboard) ((bitboard)? count_bits(get_tz(bitboard)) : -1)
 
 void reset_states_and_board() {
-  memset(bitboards, 0ULL, sizeof(bitboards));
-  memset(sides_occupancies, 0ULL, sizeof(sides_occupancies));
+  memset(bitboards, 0ULL, 96);
+  memset(sides_occupancies, 0ULL, 24);
 
   can_castle = 0;
   en_passant = no_square;
@@ -994,6 +994,8 @@ static inline void add_move(Moves* move_list, int move) {
   move_list -> moves[move_list -> count++] = move;
 }
 
+// --- add move helpers
+
 char ascii_promoted_pieces[] = {
   [0]  = '\0', // get_move_promoted_piece = '0000' or 'wP' ? (illegal) => print '\0'
   [wQ] = 'q',
@@ -1304,6 +1306,7 @@ static inline void generate_moves(Moves* moves_list) {
 }
 
 
+
 #define COPY_BOARD() \
   U64 bitboards_copy[12], sides_occupancies_copy[3];                                            \
   int side_to_move_copy, en_passant_copy, can_castle_copy;                                      \
@@ -1317,7 +1320,46 @@ static inline void generate_moves(Moves* moves_list) {
   memcpy(sides_occupancies, sides_occupancies_copy, 24);                                        \
   side_to_move = side_to_move_copy, en_passant = en_passant_copy, can_castle = can_castle_copy;
 
+enum { allow_all_moves, allow_only_captures };
 
+
+// --- make move ---
+
+static inline int make_move(int move, int move_flag) {
+  // quiet moves
+  if (move_flag == allow_all_moves) {
+    COPY_BOARD();
+
+    int source_sqr = get_move_source(move);
+    int target_sqr = get_move_target(move);
+    int piece = get_move_piece(move);
+    int promoted_piece = get_move_promoted_piece(move);
+    int capture_flag = get_move_capture_flag(move);
+    int castling_flag = get_move_castling_flag(move);
+    int double_push_flag = get_move_double_push_flag(move);
+    int en_passant_flag = get_move_en_passant_flag(move);
+
+    INFO("%c %s-%s", ascii_pieces[piece], square_to_notation[source_sqr], square_to_notation[target_sqr]);
+    // move piece
+    pop_bit(bitboards[piece], source_sqr);
+    pop_bit(sides_occupancies[both], source_sqr);
+    pop_bit(sides_occupancies[side_to_move], source_sqr);
+
+    set_bit(bitboards[piece], target_sqr);
+    set_bit(sides_occupancies[both], target_sqr);
+    set_bit(sides_occupancies[side_to_move], target_sqr);
+  }
+
+  // capture moves
+  else {
+    out("captures");
+    if (get_move_capture_flag(move)) { make_move(move, allow_all_moves); }
+    else { return 0; }
+  }
+
+  return 0;
+
+}
 
 
 /***** MAIN FUNCTION *****/
@@ -1361,20 +1403,24 @@ int main(void) {
   Moves *move_list = malloc(sizeof(Moves)); // move_list[1] == *move_list[0] == *move_list
   move_list -> count = 0;
 
-  parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq a3 0 1");
+  parse_fen(tricky_position);
   print_board(1);
 
-  COPY_BOARD();
+  generate_moves(move_list);
 
-  parse_fen(start_position);
-  print_board(1);
+  for (int i = 0; i < move_list -> count; i++) {
+    int move = move_list -> moves[i];
 
-  parse_fen(empty_board);
-  print_board(1);
+    COPY_BOARD();
 
-  RESTORE_BOARD();
+    make_move(move, allow_all_moves);
+    print_board(1);
+    getchar(); // pause between each move.
 
-  print_board(1);
+    RESTORE_BOARD();
+    print_board(1);
+    getchar();
+  }
 
   return 0;
 }
