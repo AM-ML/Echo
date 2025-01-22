@@ -1324,6 +1324,27 @@ static inline void generate_moves(Moves* moves_list) {
   }
 }
 
+/* **********************
+1111 = qkQK = 15
+wK    moved = 1111 & 1100 = 12
+h1 wR moved = 1111 & 1110 = 14
+a1 wR moved = 1111 & 1101 = 13
+
+bK    moved = 1111 & 0011 = 3
+h8 bR moved = 1111 & 1011 = 11
+a8 bR moved = 1111 & 0111 = 7
+************************* */
+
+const int castling_rights[64] = {
+   7, 15, 15, 15,  3, 15, 15, 11,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  13, 15, 15, 15, 12, 15, 15, 14,
+};
 
 
 #define COPY_BOARD() \
@@ -1438,6 +1459,10 @@ static inline int make_move(int move, int move_flag) {
           break;
       }
     }
+
+    // update castling rights
+    can_castle &= castling_rights[source_sqr];
+    can_castle &= castling_rights[target_sqr];
   }
 
   // capture moves
