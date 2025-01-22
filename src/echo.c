@@ -1388,7 +1388,20 @@ static inline int make_move(int move, int move_flag) {
       set_bit(sides_occupancies[promoted_piece], target_sqr);
       set_bit(bitboards[promoted_piece], target_sqr);
     }
+    if (en_passant_flag) {
+      if(side_to_move == white) {
+        pop_bit(bitboards[bP], target_sqr+8);
+        pop_bit(sides_occupancies[both], target_sqr+8);
+      } else {
+        pop_bit(bitboards[wP], target_sqr-8);
+        pop_bit(sides_occupancies[both], target_sqr-8);
+      }
+    }
+    en_passant = no_square;
 
+    if(double_push_flag) {
+      en_passant = (side_to_move == white)? target_sqr + 8 : target_sqr - 8;
+    }
   }
 
   // capture moves
@@ -1443,36 +1456,20 @@ int main(void) {
   Moves *move_list = malloc(sizeof(Moves)); // move_list[1] == *move_list[0] == *move_list
   move_list -> count = 0;
 
-  parse_fen("3r4/4Ppp1/8/8/8/8/4pPP1/3R4 w - - ");
+  parse_fen("8/8/8/8/2p5/3p4/PPPPPPPP/8 w - -");
   print_board(1);
 
   generate_moves(move_list);
 
-  for(int i = 0; i < move_list -> count; i++) {
-    int move = move_list -> moves[i];
-
-    COPY_BOARD();
-    make_move(move, allow_all_moves);
-    print_board(1);
-    getchar();
-    RESTORE_BOARD();
-  }
-
-  print_move_list(move_list);
-
-  side_to_move = black;
-
-  generate_moves(move_list);
   for (int i = 0; i < move_list -> count; i++) {
     int move = move_list -> moves[i];
 
+    getchar();
     COPY_BOARD();
     make_move(move, allow_all_moves);
     print_board(1);
-    getchar();
     RESTORE_BOARD();
   }
-  print_move_list(move_list);
 
   return 0;
 }
