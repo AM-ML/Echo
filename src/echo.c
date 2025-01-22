@@ -1402,6 +1402,42 @@ static inline int make_move(int move, int move_flag) {
     if(double_push_flag) {
       en_passant = (side_to_move == white)? target_sqr + 8 : target_sqr - 8;
     }
+
+    if(castling_flag) {
+      switch (target_sqr) {
+        //WCK
+        case (g1):
+          out("g1");
+          pop_bit(bitboards[wR], h1);
+          pop_bit(sides_occupancies[both], h1);
+          set_bit(bitboards[wR], f1);
+          set_bit(sides_occupancies[both], f1);
+          break;
+        //WCQ
+        case (c1):
+          out("c1");
+          pop_bit(bitboards[wR], a1);
+          pop_bit(sides_occupancies[both], a1);
+          set_bit(bitboards[wR], d1);
+          set_bit(sides_occupancies[both], d1);
+          break;
+        //BCK
+        case (g8):
+          pop_bit(bitboards[wR], h8);
+          pop_bit(sides_occupancies[both], h8);
+          set_bit(bitboards[wR], f8);
+          set_bit(sides_occupancies[both], f8);
+          break;
+
+        //BCQ
+        case (c8):
+          pop_bit(bitboards[wR], a8);
+          pop_bit(sides_occupancies[both], a8);
+          set_bit(bitboards[wR], d8);
+          set_bit(sides_occupancies[both], d8);
+          break;
+      }
+    }
   }
 
   // capture moves
@@ -1456,7 +1492,7 @@ int main(void) {
   Moves *move_list = malloc(sizeof(Moves)); // move_list[1] == *move_list[0] == *move_list
   move_list -> count = 0;
 
-  parse_fen("8/8/8/8/2p5/3p4/PPPPPPPP/8 w - -");
+  parse_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq -");
   print_board(1);
 
   generate_moves(move_list);
