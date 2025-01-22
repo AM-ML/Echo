@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#if defined(_WIN64) || defined(_WIN32)
+  #include <windows.h>
+#else
+  #include <sys/time.h>
+#endif
 
 #define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
 #define out(output) (printf(#output "\n"))
@@ -953,7 +958,15 @@ void automate_occupancy(U64 mask) {
   }
 }
 
-
+int get_time_ms() {
+  #if defined(_WIN64) || defined(_WIN32)
+    return GetTickCount();
+  #else
+    struct timeval time_value;
+    gettimeofday(&time_value, NULL);
+    return time_value.tv_sec * 1000 + time_value.tv_usec / 1000;
+  #endif
+}
 
 
 
@@ -1511,30 +1524,19 @@ int main(void) {
   Moves *move_list = malloc(sizeof(Moves)); // move_list[1] == *move_list[0] == *move_list
   move_list -> count = 0;
 
-  // parse_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq -");
-  // parse_fen(tricky_position);
-  parse_fen("1q6/P7/8/8/8/8/p1p5/k1K5 w - -");
+  parse_fen(tricky_position);
   print_board(1);
 
+  int start = get_time_ms();
+
+  printf("performance testing...\n");
   generate_moves(move_list);
-
-
-  // printf("%d", make_move(encode_move(d1, e1, wK, 0, 0, 0, 0, 0), allow_all_moves));
-  // side_to_move=white;
-  // printf("%d", is_square_attacked_by(c1, black));
-  // printf("%d\n", is_square_attacked_by(e1, black));
-  // print_board(1);
-
-  for (int i = 0; i < move_list -> count; i++) {
-    int move = move_list -> moves[i];
-
-    COPY_BOARD();
-    if(!make_move(move, allow_all_moves)) {continue;}
-    print_board(1);
-    RESTORE_BOARD();
+  for (int i = 0; i < 10; i++) {
     getchar();
   }
 
+  int final = get_time_ms() - start;
+  INFO("%dms", final);
 
   return 0;
 }
