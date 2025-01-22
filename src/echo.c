@@ -1379,7 +1379,6 @@ static inline int make_move(int move, int move_flag) {
     int double_push_flag = get_move_double_push_flag(move);
     int en_passant_flag = get_move_en_passant_flag(move);
 
-    INFO("%c %s-%s", ascii_pieces[piece], square_to_notation[source_sqr], square_to_notation[target_sqr]);
     // move piece
     pop_bit(bitboards[piece], source_sqr);
 
@@ -1398,7 +1397,6 @@ static inline int make_move(int move, int move_flag) {
     }
 
     if (promoted_piece) {
-      INFO("%c", ascii_pieces[promoted_piece]);
       pop_bit(bitboards[(side_to_move == white) ? wP : bP], target_sqr);
 
       set_bit(bitboards[promoted_piece], target_sqr);
@@ -1449,6 +1447,16 @@ static inline int make_move(int move, int move_flag) {
     can_castle &= castling_rights[target_sqr];
 
     set_sides_occupancies();
+
+    side_to_move ^= 1;
+
+    if (is_square_attacked_by((side_to_move == white)? get_lsb_index(bitboards[bK]) : get_lsb_index(bitboards[wK]), side_to_move)) {
+      RESTORE_BOARD();
+      return 0; // return illegal move
+    }
+    else {
+      return 1; // return legal move
+    }
   }
 
   // capture moves
@@ -1505,20 +1513,28 @@ int main(void) {
 
   // parse_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq -");
   // parse_fen(tricky_position);
-  parse_fen("1q6/P7/8/8/8/8/8/k2K4 w - -");
+  parse_fen("1q6/P7/8/8/8/8/p1p5/k1K5 w - -");
   print_board(1);
 
   generate_moves(move_list);
 
+
+  // printf("%d", make_move(encode_move(d1, e1, wK, 0, 0, 0, 0, 0), allow_all_moves));
+  // side_to_move=white;
+  // printf("%d", is_square_attacked_by(c1, black));
+  // printf("%d\n", is_square_attacked_by(e1, black));
+  // print_board(1);
+
   for (int i = 0; i < move_list -> count; i++) {
     int move = move_list -> moves[i];
 
-    getchar();
     COPY_BOARD();
-    make_move(move, allow_all_moves);
+    if(!make_move(move, allow_all_moves)) {continue;}
     print_board(1);
     RESTORE_BOARD();
+    getchar();
   }
+
 
   return 0;
 }
