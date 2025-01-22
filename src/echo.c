@@ -958,16 +958,6 @@ void automate_occupancy(U64 mask) {
   }
 }
 
-int get_time_ms() {
-  #if defined(_WIN64) || defined(_WIN32)
-    return GetTickCount();
-  #else
-    struct timeval time_value;
-    gettimeofday(&time_value, NULL);
-    return time_value.tv_sec * 1000 + time_value.tv_usec / 1000;
-  #endif
-}
-
 
 
 /* --- 24 bits / 3 bytes ---    Encoded Move-List Item Structure
@@ -1096,27 +1086,21 @@ static inline void generate_moves(Moves* moves_list) {
           dest_sqr = src_sqr - 8; // move up by 1 row
 
           // quiet pawn moves
-          if (! (dest_sqr < a8) && !get_bit(sides_occupancies[both], dest_sqr)) {
-
+          if (dest_sqr >= a8 && !get_bit(sides_occupancies[both], dest_sqr)) {
+            // Promotion moves
             if (src_sqr >= a7 && src_sqr <= h7) {
-              // 4 moves: promotion to q, r, b, n
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wQ, 0, 0, 0, 0));
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wR, 0, 0, 0, 0));
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wB, 0, 0, 0, 0));
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wN, 0, 0, 0, 0));
-            }
-            else {
-              // pawn moves 2 squares
-              if ((src_sqr >= a2 && src_sqr <= h2)
-                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr - 8)) {
-                add_move(moves_list, encode_move(src_sqr, dest_sqr - 8, wP, 0, 0, 1, 0, 0));
-              }
-              // pawn moves 1 square
-              if (!get_bit(sides_occupancies[both], dest_sqr)) {
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wQ, 0, 0, 0, 0));
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wR, 0, 0, 0, 0));
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wB, 0, 0, 0, 0));
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, wN, 0, 0, 0, 0));
+            } else {
                 add_move(moves_list, encode_move(src_sqr, dest_sqr, wP, 0, 0, 0, 0, 0));
-              }
+                // Double pawn push
+                if (src_sqr >= a2 && src_sqr <= h2 && !get_bit(sides_occupancies[both], dest_sqr - 8)) {
+                    add_move(moves_list, encode_move(src_sqr, dest_sqr - 8, wP, 0, 0, 1, 0, 0));
+                }
             }
-          }
+        }
 
           attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
           while (attacks) {
@@ -1174,26 +1158,21 @@ static inline void generate_moves(Moves* moves_list) {
           src_sqr = get_lsb_index(position);
           dest_sqr = src_sqr + 8; // move up by 1 row
           // quiet pawn moves
-          if (! (dest_sqr > h1) && !get_bit(sides_occupancies[both], dest_sqr)) {
+          if (dest_sqr <= h1 && !get_bit(sides_occupancies[both], dest_sqr)) {
+            // Promotion moves
             if (src_sqr >= a2 && src_sqr <= h2) {
-              // 4 moves: promotion to q, r, b, n
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bQ, 0, 0, 0, 0));
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bR, 0, 0, 0, 0));
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bB, 0, 0, 0, 0));
-              add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bN, 0, 0, 0, 0));
-            }
-            else {
-              // pawn moves 2 squares
-              if ((src_sqr >= a7 && src_sqr <= h7)
-                && !get_bit(sides_occupancies[both], dest_sqr) && !get_bit(sides_occupancies[both], dest_sqr + 8)) {
-                add_move(moves_list, encode_move(src_sqr, dest_sqr+8, bP, 0, 0, 1, 0, 0));
-              }
-              // pawn moves 1 square
-              if (!get_bit(sides_occupancies[both], dest_sqr)) {
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bQ, 0, 0, 0, 0));
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bR, 0, 0, 0, 0));
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bB, 0, 0, 0, 0));
+                add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, bN, 0, 0, 0, 0));
+            } else {
                 add_move(moves_list, encode_move(src_sqr, dest_sqr, bP, 0, 0, 0, 0, 0));
-              }
+                // Double pawn push
+                if (src_sqr >= a7 && src_sqr <= h7 && !get_bit(sides_occupancies[both], dest_sqr + 8)) {
+                    add_move(moves_list, encode_move(src_sqr, dest_sqr + 8, bP, 0, 0, 1, 0, 0));
+                }
             }
-          }
+        }
           attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
           while(attacks) {
             dest_sqr = get_lsb_index(attacks);
@@ -1431,26 +1410,24 @@ static inline int make_move(int move, int move_flag) {
       switch (target_sqr) {
         //WCK
         case (g1):
-          out("g1");
           pop_bit(bitboards[wR], h1);
           set_bit(bitboards[wR], f1);
           break;
         //WCQ
         case (c1):
-          out("c1");
           pop_bit(bitboards[wR], a1);
           set_bit(bitboards[wR], d1);
           break;
         //BCK
         case (g8):
-          pop_bit(bitboards[wR], h8);
-          set_bit(bitboards[wR], f8);
+          pop_bit(bitboards[bR], h8);
+          set_bit(bitboards[bR], f8);
           break;
 
         //BCQ
         case (c8):
-          pop_bit(bitboards[wR], a8);
-          set_bit(bitboards[wR], d8);
+          pop_bit(bitboards[bR], a8);
+          set_bit(bitboards[bR], d8);
           break;
       }
     }
@@ -1509,6 +1486,45 @@ void init_default_board_position() {
   sides_occupancies[both] = 18446462598732906495ULL;
 }
 
+// PERFT
+
+int get_time_ms() {
+  #if defined(_WIN64) || defined(_WIN32)
+    return GetTickCount();
+  #else
+    struct timeval time_value;
+    gettimeofday(&time_value, NULL);
+    return (int) time_value.tv_sec * 1000 + (int) time_value.tv_usec / 1000;
+  #endif
+}
+
+long nodes; // positions reached during move gen test at a certain depth
+
+static inline void perft_driver(int depth) {
+  if (depth == 0) {
+    nodes++;
+    return;
+  }
+
+  Moves ml;
+  ml.count = 0;
+
+  generate_moves(&ml);
+
+  for (int i = 0; i < ml.count; i++) {
+    int move = ml.moves[i];
+
+    COPY_BOARD();
+
+    if(!make_move(move, allow_all_moves)) { continue; }
+    perft_driver(depth - 1); // call perft recursively
+
+    RESTORE_BOARD();
+  }
+}
+
+
+
 void init_all() {
   init_leaper_attacks();
   init_sliding_pieces(bishop);
@@ -1521,22 +1537,24 @@ void init_all() {
 int main(void) {
   init_all();
 
-  Moves *move_list = malloc(sizeof(Moves)); // move_list[1] == *move_list[0] == *move_list
-  move_list -> count = 0;
-
-  parse_fen(tricky_position);
+  parse_fen(start_position);
   print_board(1);
+
+  int depth;
+  printf("enter depth: ");
+  scanf("%d", &depth);
 
   int start = get_time_ms();
 
-  printf("performance testing...\n");
-  generate_moves(move_list);
-  for (int i = 0; i < 10; i++) {
-    getchar();
-  }
+  perft_driver(depth);
+  /*
+   depth: 6
+   nodes: 8,031,647,685 (correct)
+   time: 336.365s
+   * */
 
-  int final = get_time_ms() - start;
-  INFO("%dms", final);
+  printf("\033[1;92mNodes: \033[1;96m%ld\033[0;0m\n", nodes);
+  printf("\033[1;92mTime: \033[1;93m%dms\033[0;0m\n", get_time_ms() - start);
 
   return 0;
 }
