@@ -1382,12 +1382,8 @@ static inline int make_move(int move, int move_flag) {
     INFO("%c %s-%s", ascii_pieces[piece], square_to_notation[source_sqr], square_to_notation[target_sqr]);
     // move piece
     pop_bit(bitboards[piece], source_sqr);
-    pop_bit(sides_occupancies[both], source_sqr);
-    pop_bit(sides_occupancies[side_to_move], source_sqr);
 
     set_bit(bitboards[piece], target_sqr);
-    set_bit(sides_occupancies[both], target_sqr);
-    set_bit(sides_occupancies[side_to_move], target_sqr);
 
     if(capture_flag) {
       int start_piece = side_to_move == white? bP:wP, end_piece = side_to_move == white? bK:wK;
@@ -1395,7 +1391,6 @@ static inline int make_move(int move, int move_flag) {
       for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
         if (get_bit(bitboards[bb_piece], target_sqr)) {
           pop_bit(bitboards[bb_piece], target_sqr);
-          pop_bit(sides_occupancies[side_to_move == white? black : white], target_sqr);
 
           break;
         }
@@ -1406,16 +1401,13 @@ static inline int make_move(int move, int move_flag) {
       INFO("%c", ascii_pieces[promoted_piece]);
       pop_bit(bitboards[(side_to_move == white) ? wP : bP], target_sqr);
 
-      set_bit(sides_occupancies[promoted_piece], target_sqr);
       set_bit(bitboards[promoted_piece], target_sqr);
     }
     if (en_passant_flag) {
       if(side_to_move == white) {
         pop_bit(bitboards[bP], target_sqr+8);
-        pop_bit(sides_occupancies[both], target_sqr+8);
       } else {
         pop_bit(bitboards[wP], target_sqr-8);
-        pop_bit(sides_occupancies[both], target_sqr-8);
       }
     }
     en_passant = no_square;
@@ -1430,32 +1422,24 @@ static inline int make_move(int move, int move_flag) {
         case (g1):
           out("g1");
           pop_bit(bitboards[wR], h1);
-          pop_bit(sides_occupancies[both], h1);
           set_bit(bitboards[wR], f1);
-          set_bit(sides_occupancies[both], f1);
           break;
         //WCQ
         case (c1):
           out("c1");
           pop_bit(bitboards[wR], a1);
-          pop_bit(sides_occupancies[both], a1);
           set_bit(bitboards[wR], d1);
-          set_bit(sides_occupancies[both], d1);
           break;
         //BCK
         case (g8):
           pop_bit(bitboards[wR], h8);
-          pop_bit(sides_occupancies[both], h8);
           set_bit(bitboards[wR], f8);
-          set_bit(sides_occupancies[both], f8);
           break;
 
         //BCQ
         case (c8):
           pop_bit(bitboards[wR], a8);
-          pop_bit(sides_occupancies[both], a8);
           set_bit(bitboards[wR], d8);
-          set_bit(sides_occupancies[both], d8);
           break;
       }
     }
@@ -1463,6 +1447,8 @@ static inline int make_move(int move, int move_flag) {
     // update castling rights
     can_castle &= castling_rights[source_sqr];
     can_castle &= castling_rights[target_sqr];
+
+    set_sides_occupancies();
   }
 
   // capture moves
@@ -1517,7 +1503,9 @@ int main(void) {
   Moves *move_list = malloc(sizeof(Moves)); // move_list[1] == *move_list[0] == *move_list
   move_list -> count = 0;
 
-  parse_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq -");
+  // parse_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq -");
+  // parse_fen(tricky_position);
+  parse_fen("1q6/P7/8/8/8/8/8/k2K4 w - -");
   print_board(1);
 
   generate_moves(move_list);
