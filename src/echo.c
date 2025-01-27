@@ -1524,6 +1524,37 @@ static inline void perft_driver(int depth) {
 }
 
 
+void perft_test(int depth) {
+
+  printf("\n  \033[1;92mPerformance Test\033[0;0m\n\n");
+
+  Moves ml;
+  ml.count = 0;
+
+  generate_moves(&ml);
+
+  for (int i = 0; i < ml.count; i++) {
+    COPY_BOARD();
+
+    if(!make_move(ml.moves[i], allow_all_moves)) { continue; }
+
+    long prev_nodes = nodes;
+
+    perft_driver(depth - 1);
+
+    long new_nodes = nodes - prev_nodes;
+
+    RESTORE_BOARD();
+
+    printf("    \033[1;93mmove: \033[0;0m");
+    printf("%s-%s%c \033[1;93mnodes: \033[0;0m%ld\n", square_to_notation[get_move_source(ml.moves[i])],
+           square_to_notation[get_move_target(ml.moves[i])],
+           ascii_promoted_pieces[get_move_promoted_piece(ml.moves[i])], new_nodes);
+
+  }
+
+}
+
 
 void init_all() {
   init_leaper_attacks();
@@ -1537,24 +1568,20 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(start_position);
+  parse_fen(tricky_position);
   print_board(1);
 
   int depth;
-  printf("enter depth: ");
-  scanf("%d", &depth);
+  printf("enter depth: "); scanf("%d", &depth);
 
   int start = get_time_ms();
 
-  perft_driver(depth);
-  /*
-   depth: 6
-   nodes: 8,031,647,685 (correct)
-   time: 336.365s
-   * */
+  perft_test(depth);
 
-  printf("\033[1;92mNodes: \033[1;96m%ld\033[0;0m\n", nodes);
-  printf("\033[1;92mTime: \033[1;93m%dms\033[0;0m\n", get_time_ms() - start);
+
+  printf("\n  \033[1;96mDepth: \033[1;93m%d\033[0;0m\n", depth);
+  printf("  \033[1;96mNodes: \033[1;93m%ld\033[0;0m\n", nodes);
+  printf("  \033[1;96m-Time: \033[1;93m%dms\033[0;0m\n", get_time_ms() - start);
 
   return 0;
 }
