@@ -1757,7 +1757,7 @@ int parse_move(char *move_str) { // move_str: 'e7e8q'
 
     if (get_move_source(move) == src_sqr && get_move_target(move) == dest_sqr) {
       int pp = get_move_promoted_piece(move);
-      if(pp == 0 && move_str[4] =='\0') return move;
+      if(pp == 0 && (move_str[4] =='\0' || move_str[4] == ' ')) return move;
       else if((pp == wQ) && move_str[4] == 'q') return move;
       else if((pp == wR) && move_str[4] == 'r') return move;
       else if((pp == wN) && move_str[4] == 'n') return move;
@@ -1767,6 +1767,44 @@ int parse_move(char *move_str) { // move_str: 'e7e8q'
   }
 
   return 0;
+}
+
+/*  position startpos
+ *  position startpos moves e2e4 e7e5
+ *  position startpos fen 8/8/8/8/8/8/8/8/8 w - - moves e2e4
+ *  */
+void parse_position(char *command) {
+  command += 9; // skip "position "
+  char *cur_char = command;
+
+  // parse "startpos" cmd
+  if(strncmp(command, "startpos", 8) == 0) {
+    cur_char += 8;
+    parse_fen(start_position);
+  } else {
+    cur_char = strstr(command, "fen");
+    if (!cur_char) { parse_fen(start_position); }
+    else {
+      cur_char += 4;
+      parse_fen(cur_char);
+    }
+  }
+
+  cur_char = strstr(cur_char, "moves");
+  if(cur_char) {
+    cur_char += 6;
+
+    while(*cur_char) {
+      int move = parse_move(cur_char);
+      if (!move) { break; }
+      make_move(move, allow_all_moves);
+      while(*cur_char && *cur_char != ' ') {cur_char++;}
+      cur_char++;
+    }
+  }
+
+  puts(cur_char);
+
 }
 
 void init_all() {
@@ -1780,18 +1818,10 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(promotion_position);
+  parse_position("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e5g6 f7g6 e1g1 e8g8 f1d1 f8d8 d1e1 h3g2 g1g2 a6e2 e1e2 e7d6 a2a4 b4a3 a1a3 d6a3 b2a3");
   print_board(1);
 
-  int move = parse_move("a7a8q");
-
-  if(move){
-    make_move(move, allow_all_moves);
-    // make_move(parse_move("e8g8"), allow_all_moves);
-    // make_move(parse_move("f1e1"), allow_all_moves);
-    print_board(1);
-  }
-  else printf("\n\033[1;31millegal move\033[0;0m\n\n");
+  printf("%d\n", parse_move("h3g2"));
 
   return 0;
 }
