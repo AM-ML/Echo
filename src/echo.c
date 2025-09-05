@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #if defined(_WIN64) || defined(_WIN32)
 #include <windows.h>
 #else
@@ -30,70 +31,14 @@
 
 // Big Endian File-Rank Mapping
 enum {
-  a8,
-  b8,
-  c8,
-  d8,
-  e8,
-  f8,
-  g8,
-  h8,
-  a7,
-  b7,
-  c7,
-  d7,
-  e7,
-  f7,
-  g7,
-  h7,
-  a6,
-  b6,
-  c6,
-  d6,
-  e6,
-  f6,
-  g6,
-  h6,
-  a5,
-  b5,
-  c5,
-  d5,
-  e5,
-  f5,
-  g5,
-  h5,
-  a4,
-  b4,
-  c4,
-  d4,
-  e4,
-  f4,
-  g4,
-  h4,
-  a3,
-  b3,
-  c3,
-  d3,
-  e3,
-  f3,
-  g3,
-  h3,
-  a2,
-  b2,
-  c2,
-  d2,
-  e2,
-  f2,
-  g2,
-  h2,
-  a1,
-  b1,
-  c1,
-  d1,
-  e1,
-  f1,
-  g1,
-  h1,
+  a8, b8, c8, d8, e8, f8, g8, h8,
+  a7, b7, c7, d7, e7, f7, g7, h7,
+  a6, b6, c6, d6, e6, f6, g6, h6,
+  a5, b5, c5, d5, e5, f5, g5, h5,
+  a4, b4, c4, d4, e4, f4, g4, h4,
+  a3, b3, c3, d3, e3, f3, g3, h3,
+  a2, b2, c2, d2, e2, f2, g2, h2,
+  a1, b1, c1, d1, e1, f1, g1, h1,
   no_square
 };
 
@@ -1742,32 +1687,49 @@ void perft_test(int depth) {
   }
 }
 
+void search_position(int depth) {
+  // bestmove temp placeholder
+  puts("bestmove e2e4 ponder d7d5");
+}
+
+
 //*** basic uci protocol
-// parse move: return 1: legal, 0: illegal
-int parse_move(char *move_str) { // move_str: 'e7e8q'
+int parse_move(char *move_str) { // move_str: e2e4, e7e8q, etc.
   Moves ml;
   ml.count = 0;
   generate_moves(&ml);
 
-  int src_sqr = (move_str[0] - 'a') + ((8 - (move_str[1] - '0')) * 8);
+  // must at least have source + target squares
+  if (strlen(move_str) < 4) return 0;
+
+  int src_sqr  = (move_str[0] - 'a') + ((8 - (move_str[1] - '0')) * 8);
   int dest_sqr = (move_str[2] - 'a') + ((8 - (move_str[3] - '0')) * 8);
 
   for (int i = 0; i < ml.count; i++) {
     int move = ml.moves[i];
 
-    if (get_move_source(move) == src_sqr && get_move_target(move) == dest_sqr) {
+    if (get_move_source(move) == src_sqr &&
+      get_move_target(move) == dest_sqr) {
+
       int pp = get_move_promoted_piece(move);
-      if(pp == 0 && (move_str[4] =='\0' || move_str[4] == ' ')) return move;
-      else if((pp == wQ) && move_str[4] == 'q') return move;
-      else if((pp == wR) && move_str[4] == 'r') return move;
-      else if((pp == wN) && move_str[4] == 'n') return move;
-      else if((pp == wB) && move_str[4] == 'b') return move;
-      continue;
+
+      // non-promotion move
+      if (pp == 0 && (move_str[4] == '\0' || isspace((unsigned char)move_str[4]))) {
+        return move;
+      }
+
+      // promotion moves (accept lower/upper case)
+      char promo = (char)tolower((unsigned char)move_str[4]);
+      if (pp == wQ && promo == 'q') return move;
+      if (pp == wR && promo == 'r') return move;
+      if (pp == wN && promo == 'n') return move;
+      if (pp == wB && promo == 'b') return move;
     }
   }
 
-  return 0;
+  return 0; // illegal / not found
 }
+
 
 /*  position startpos
  *  position startpos moves e2e4 e7e5
@@ -1803,9 +1765,85 @@ void parse_position(char *command) {
     }
   }
 
-  puts(cur_char);
-
+  print_board(1);
 }
+
+/*
+ * go
+ * go moves e2e4
+ * go depth 6 moves e2e4
+ * go moves e2e4 movetime 300 depth 10
+ * */
+void parse_go(char *command){
+  command += 3;
+
+  int depth = -1;
+  // char *cur_depth = NULL;
+  int time_ms = -1;
+
+  if(strstr(command, "depth")) {
+    depth = atoi(strstr(command, "depth") + 6);
+  } else depth = 6;
+
+  if(strstr(command, "movetime")) {
+    time_ms = atoi(strstr(command, "movetime") + 8);
+  }
+
+  search_position(depth);
+}
+
+
+void uci_loop() {
+  // clear buffer
+  setbuf(stdin, NULL);
+  setbuf(stdout, NULL);
+
+  // define input command (user or gui) length
+  char input [2000];
+
+  puts("id name echo");
+  puts("id name am-ml");
+  puts("uciok");
+
+  while (1) {
+    memset(input, 0, sizeof(input)); // clear command input
+    fflush(stdout); // ensure output reach
+
+    if (!fgets(input, 2000, stdin)) {
+      continue;
+    }
+    if (input[0] == '\n') continue;
+
+    if (strncmp(input, "isready", 7) == 0) {
+      puts("readyok"); continue;
+    }
+
+    if (strncmp(input, "position", 8) == 0) {
+      parse_position(input); continue;
+    }
+
+    if (strncmp(input, "ucinewgame", 10) == 0) {
+      parse_position("position startpos"); continue;
+    }
+
+    if (strncmp(input, "go", 2) == 0) {
+      parse_go(input); continue;
+    }
+
+    if (strncmp(input, "quit", 4) == 0 ) {
+      break; continue;
+    }
+
+    if (strncmp(input, "uci", 3) == 0) {
+      puts("uciok"); continue;
+    }
+
+    if (strncmp(input, "print", 5) == 0) {
+      print_board(1); continue;
+    }
+  }
+}
+
 
 void init_all() {
   init_leaper_attacks();
@@ -1818,10 +1856,8 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_position("position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e5g6 f7g6 e1g1 e8g8 f1d1 f8d8 d1e1 h3g2 g1g2 a6e2 e1e2 e7d6 a2a4 b4a3 a1a3 d6a3 b2a3");
-  print_board(1);
-
-  printf("%d\n", parse_move("h3g2"));
+  parse_position("position startpos");
+  uci_loop();
 
   return 0;
 }
