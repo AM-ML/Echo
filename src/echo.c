@@ -1687,6 +1687,47 @@ void perft_test(int depth) {
   }
 }
 
+
+int material_score[12] = {
+     100, // wP eval
+     300, // N
+     300, // B
+     500, // R
+    1000, // Q
+   10000, // K
+    -100, // bP
+    -300, // n
+    -300, // b
+    -500, // r
+   -1000, // q
+  -10000  // k
+};
+
+
+static inline int eval() {
+  int score = 0;
+  U64 cur_bb;
+
+  int piece, square;
+
+  for (int bb_piece = wP; bb_piece <= bK; bb_piece++) { // loop over each piece's bitboard
+    cur_bb = bitboards[bb_piece];
+    while(cur_bb) { // go over the bitboard's squares
+      piece = bb_piece;
+
+      square = get_lsb_index(cur_bb); // get the piece
+
+      score += material_score[piece]; // assign it to the score
+
+      pop_bit(cur_bb, square);
+    }
+  }
+
+  if(side_to_move == white) return score;
+  return -score;
+}
+
+
 void search_position(int depth) {
   // bestmove temp placeholder
   puts("bestmove e2e4 ponder d7d5");
@@ -1856,8 +1897,9 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_position("position startpos");
-  uci_loop();
+  parse_position("position startpos moves d2d4 d7d5 c2c4 d5c4 e2e4 g8f6 b1c3 b8c6 g1f3 e7e6 f1c4 f8e7 e1g1 e8g8 f3e5 c6e5 d4e5 d8d1 f1d1");
+
+  printf("%d\n", eval());
 
   return 0;
 }
