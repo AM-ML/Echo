@@ -8,6 +8,10 @@
 #include <sys/time.h>
 #endif
 
+
+#define INF 1000000
+#define NEG_INF -1000000
+
 #define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
 #define out(output) (printf(#output "\n"))
 
@@ -1104,7 +1108,7 @@ char ascii_promoted_pieces[] = {[0] = '\0', // get_move_promoted_piece = '0000'
 
 // for UCI purposes
 static inline void print_move(int move) {
-  printf("%s-%s%c\n", square_to_notation[get_move_source(move)],
+  printf("%s%s%c\n", square_to_notation[get_move_source(move)],
          square_to_notation[get_move_target(move)],
          ascii_promoted_pieces[get_move_promoted_piece(move)]);
 }
@@ -1879,9 +1883,61 @@ static inline int eval() {
 }
 
 
+int ply;  // half-move counter
+int best_move;
+
+static inline int negamax(int alpha, int beta, int depth) {
+  if (depth == 0) return eval();
+
+  nodes++;
+
+  Moves ml[1];
+  int cur_best_move;
+  int old_alpha = alpha;
+
+  generate_moves(ml);
+
+  for(int i = 0; i < ml -> count; i++) {
+   COPY_BOARD();
+
+    ply++;
+
+    if(make_move(ml -> moves[i], allow_all_moves) == 0) { // if illegal move
+      ply--;
+
+      continue;
+    }
+
+    int score = -negamax(-beta, -alpha, depth - 1);
+
+    ply --;
+
+    RESTORE_BOARD();
+
+
+    if(alpha >= beta) return beta;
+    if(score > alpha) {
+      alpha = score;
+
+      if (ply == 0) cur_best_move = ml -> moves[i];
+    }
+  }
+
+  if(old_alpha != alpha) {
+    best_move = cur_best_move;
+    printf("depth: %d ", depth);
+    printf("nodes: %ld best move: ", nodes);
+    print_move(best_move);
+  }
+  return alpha;
+}
+
+
 void search_position(int depth) {
-  // bestmove temp placeholder
-  puts("bestmove e2e4 ponder d7d5");
+  int score = negamax(NEG_INF, INF, depth);
+
+  printf("bestmove "); print_move(best_move);
+  printf("eval: %d\n", score);
 }
 
 
@@ -1956,8 +2012,6 @@ void parse_position(char *command) {
       cur_char++;
     }
   }
-
-  print_board(1);
 }
 
 /*
@@ -2048,9 +2102,11 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_position("position startpos moves e2e4 d7d5 g1f3");
+  parse_position("position startpos");
 
-  printf("%d\n", eval());
+  uci_loop();
+
+
 
   return 0;
 }
