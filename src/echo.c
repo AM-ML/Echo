@@ -1307,7 +1307,7 @@ static inline void generate_moves(Moves *moves_list) {
             // get_bit() for ensurance
             if (can_en_passant && get_bit(bitboards[wP], en_passant - 8)) {
               add_move(moves_list,
-                       encode_move(src_sqr, en_passant, bP, 0, 0, 0, 1, 0));
+                       encode_move(src_sqr, en_passant, bP, 0, 1, 0, 1, 0));
             }
           }
           pop_bit(position, src_sqr);
@@ -1843,18 +1843,38 @@ int pst_score[12][64] = {
 
 
 int material_score[12] = {
-     100, // wP eval
-     300, // N
-     300, // B
-     500, // R
-    1000, // Q
+     230, // wP eval
+     817, // N
+     870, // B
+    1330, // R
+    2610, // Q
    10000, // K
-    -100, // bP
-    -300, // n
-    -300, // b
-    -500, // r
-   -1000, // q
+    -230, // bP
+    -817, // n
+    -870, // b
+   -1330, // r
+   -2610, // q
   -10000  // k
+};
+
+
+// Most Valuable Victim (MVV) - Least Valuable Attacker lookup table (LVA)
+// note: (might look redundant but the use of a 12x12
+// is for en_passant's target_piece (defaults to wP, same result -> 105 score)
+static int mvv_lva[12][12] = {
+  105, 205, 305, 405, 505, 605,   105, 205, 305, 405, 505, 605,
+  104, 204, 304, 404, 504, 604,   104, 204, 304, 404, 504, 604,
+  103, 203, 303, 403, 503, 603,   103, 203, 303, 403, 503, 603,
+  102, 202, 302, 402, 502, 602,   102, 202, 302, 402, 502, 602,
+  101, 201, 301, 401, 501, 601,   101, 201, 301, 401, 501, 601,
+  100, 200, 300, 400, 500, 600,   100, 200, 300, 400, 500, 600,
+
+  105, 205, 305, 405, 505, 605,   105, 205, 305, 405, 505, 605,
+  104, 204, 304, 404, 504, 604,   104, 204, 304, 404, 504, 604,
+  103, 203, 303, 403, 503, 603,   103, 203, 303, 403, 503, 603,
+  102, 202, 302, 402, 502, 602,   102, 202, 302, 402, 502, 602,
+  101, 201, 301, 401, 501, 601,   101, 201, 301, 401, 501, 601,
+  100, 200, 300, 400, 500, 600,   100, 200, 300, 400, 500, 600,
 };
 
 static inline int eval() {
@@ -1869,9 +1889,7 @@ static inline int eval() {
       piece = bb_piece;
 
       square = get_lsb_index(cur_bb); // get the piece
-
       score += material_score[piece]; // assign it to the score
-
       score += pst_score[piece][square];
 
       pop_bit(cur_bb, square);
@@ -1886,19 +1904,93 @@ static inline int eval() {
 int ply;  // half-move counter
 int best_move;
 
+static inline int score_move(int move) {
+  if(get_move_capture_flag(move)) { // capture move, mvv_lva lt
+    int target_piece = wP;
+    int start_piece = side_to_move == white ? bP : wP;
+    int end_piece = side_to_move == white ? bK : wK;
+
+    for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
+      if (get_bit(bitboards[bb_piece], get_move_target(move))) {
+        target_piece = bb_piece;
+        break;
+      }
+    }
+
+
+    return mvv_lva[get_move_piece(move)][target_piece]; // return mvv_lva score
+  } else { // score quiet move
+  }
+
+  return 0;
+}
+
+void print_moves_score(Moves* ml) {
+  for(int i = 0; i < ml ->count; i++) {
+    int move = ml ->moves[i];
+    printf("move: ");
+    printf("%s%s%c ", square_to_notation[get_move_source(move)],
+         square_to_notation[get_move_target(move)],
+         ascii_promoted_pieces[get_move_promoted_piece(move)]);
+    printf("score: %d\n", score_move(move));
+  }
+}
+
+static inline int quiescence_search(int alpha, int beta) {
+  nodes++;
+  int evaluation = eval();
+
+  if(alpha >= beta) return beta;
+  if(evaluation > alpha) {
+    alpha = evaluation;
+  }
+
+  Moves ml[1];
+  generate_moves(ml);
+
+  for(int i = 0; i < ml -> count; i++) {
+    COPY_BOARD();
+
+    ply++;
+
+    if(make_move(ml -> moves[i], allow_only_captures) == 0) {
+      ply--;
+      continue;
+    }
+
+    int score = -quiescence_search(-beta, -alpha);
+    ply --;
+    RESTORE_BOARD();
+
+    if(score > alpha) {
+      alpha = score;
+    }
+    if(alpha >= beta) return beta;
+  }
+
+  return alpha;
+}
+
 static inline int negamax(int alpha, int beta, int depth) {
-  if (depth == 0) return eval();
+  if (depth == 0) {
+    return quiescence_search(alpha, beta);
+  }
 
   nodes++;
 
+  int in_check = is_square_attacked_by(
+    (side_to_move == white? get_lsb_index(bitboards[wK]):
+    get_lsb_index(bitboards[bK])), side_to_move ^ 1);
+  int legal_moves = 0;
+
   Moves ml[1];
-  int cur_best_move;
+  int cur_best_move = 0;
   int old_alpha = alpha;
 
   generate_moves(ml);
 
   for(int i = 0; i < ml -> count; i++) {
-   COPY_BOARD();
+    COPY_BOARD();
 
     ply++;
 
@@ -1908,6 +2000,8 @@ static inline int negamax(int alpha, int beta, int depth) {
       continue;
     }
 
+    legal_moves++;
+
     int score = -negamax(-beta, -alpha, depth - 1);
 
     ply --;
@@ -1915,29 +2009,35 @@ static inline int negamax(int alpha, int beta, int depth) {
     RESTORE_BOARD();
 
 
-    if(alpha >= beta) return beta;
     if(score > alpha) {
       alpha = score;
 
       if (ply == 0) cur_best_move = ml -> moves[i];
     }
+    if(alpha >= beta) return beta;
+  }
+
+  if(legal_moves == 0) {
+    if (in_check) return -59000 + ply; // return mating score (search deeper for checkmate)
+    else return 0; // stalemate / draw (0)
   }
 
   if(old_alpha != alpha) {
     best_move = cur_best_move;
-    printf("depth: %d ", depth);
-    printf("nodes: %ld best move: ", nodes);
-    print_move(best_move);
   }
   return alpha;
 }
 
 
 void search_position(int depth) {
+  best_move = 0;
+  nodes = 0;
   int score = negamax(NEG_INF, INF, depth);
 
-  printf("bestmove "); print_move(best_move);
-  printf("eval: %d\n", score);
+  if(best_move) { // if not null move / not initialized (e.g. a8a8)
+    printf("info score cp %d depth %d nodes %ld\n", side_to_move^1? score : -score, depth, nodes);
+    printf("bestmove "); print_move(best_move);
+  }
 }
 
 
@@ -2102,10 +2202,13 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_position("position startpos");
+  parse_fen(killer_position);
+  print_board(1);
+  Moves ml[1];
 
-  uci_loop();
+  generate_moves(ml);
 
+  print_moves_score(ml);
 
 
   return 0;
