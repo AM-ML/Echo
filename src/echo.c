@@ -1925,6 +1925,31 @@ static inline int score_move(int move) {
   return 0;
 }
 
+static inline int sort_moves(Moves * ml) {
+  int scores[ml -> count];
+
+  for(int i= 0; i < ml->count; i++) {
+    scores[i] = score_move(ml->moves[i]);
+  }
+
+  for(int i = 1; i < ml->count; i++) {
+    int key_score = scores[i];
+    int key_move = ml->moves[i];
+    int j = i-1;
+
+    for(; j >=0 && scores[j] < key_score; j--) {
+      scores[j+1] = scores[j];
+      ml->moves[j+1] = ml->moves[j];
+    }
+
+    scores[j+1] = key_score;
+    ml->moves[j+1] = key_move;
+  }
+
+  return 1;
+
+}
+
 void print_moves_score(Moves* ml) {
   for(int i = 0; i < ml ->count; i++) {
     int move = ml ->moves[i];
@@ -1988,6 +2013,7 @@ static inline int negamax(int alpha, int beta, int depth) {
   int old_alpha = alpha;
 
   generate_moves(ml);
+  sort_moves(ml);
 
   for(int i = 0; i < ml -> count; i++) {
     COPY_BOARD();
@@ -2202,13 +2228,10 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(killer_position);
+  parse_fen(tricky_position);
   print_board(1);
-  Moves ml[1];
 
-  generate_moves(ml);
-
-  print_moves_score(ml);
+  uci_loop();
 
 
   return 0;
