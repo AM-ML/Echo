@@ -80,8 +80,8 @@ const char *square_to_notation[] = {
     "e3", "f3", "g3", "h3", "a2", "b2", "c2", "d2", "e2", "f2", "g2",
     "h2", "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"};
 int char_to_square(const char *square) {
-  if (strlen(square) != 2) {
-    return -1; // Invalid input length
+  if (!square || strlen(square) != 2) {
+    return no_square; // invalid input
   }
 
   char file = square[0];
@@ -89,14 +89,15 @@ int char_to_square(const char *square) {
 
   // Validate rank and file
   if (file < 'a' || file > 'h' || rank < '1' || rank > '8') {
-    return -1; // Invalid file or rank
+    return no_square; // Invalid file or rank
   }
 
-  // Calculate the index in the enum
-  int file_index = file - 'a';       // 0 for 'a', 1 for 'b', ..., 7 for 'h'
-  int rank_index = 8 - (rank - '0'); // 0 for '8', 1 for '7', ..., 7 for '1'
+  int file_index = file - 'a';       // 0 for 'a'
+  int rank_index = 8 - (rank - '0'); // 0 for '8', ..., 7 for '1'
+  int idx = rank_index * 8 + file_index; // Convert to 0..63
 
-  return rank_index * 8 + file_index; // Convert to square enum/int
+  if (idx < 0 || idx >= no_square) return no_square;
+  return idx;
 }
 
 const U64 not_A_file = 18374403900871474942ULL;
@@ -1080,6 +1081,18 @@ void automate_occupancy(U64 mask) {
 #define get_move_en_passant_flag(move) (((move) & 0x400000))
 #define get_move_castling_flag(move) (((move) & 0x800000))
 
+static inline int is_valid_encoded_move(int move) {
+    int src = get_move_source(move);
+    int dst = get_move_target(move);
+    int pc  = get_move_piece(move);
+
+    /* simple field range checks */
+    if (src < 0 || src >= 64) return 0;
+    if (dst < 0 || dst >= 64) return 0;
+    if (pc  < 0 || pc  >= 12) return 0; /* piece values 0..11 */
+    return 1;
+}
+
 // --- move output debugging function
 #define print_move_info(move)                                                  \
   INFO("Source Square: %s", square_to_notation[get_move_source(move)]);        \
@@ -1098,8 +1111,21 @@ typedef struct {
   int count;
 } Moves;
 
-static inline void add_move(Moves *move_list, int move) {
+#define MOVES_CAPACITY 256
+
+#define MOVES_CAPACITY 256
+static inline int add_move(Moves *move_list, int move) {
+  if (!move_list) return 0;
+  if (!is_valid_encoded_move(move)) {
+    /* malformed: ignore it */
+    return 0;
+  }
+  if (move_list->count >= MOVES_CAPACITY) {
+    /* capacity exceeded */
+    return 0;
+  }
   move_list->moves[move_list->count++] = move;
+  return 1;
 }
 
 // --- add move helpers
@@ -1126,16 +1152,19 @@ static inline void print_move_list(Moves *move_list) {
     for (int i = 0; i < move_list->count; i++) {
       int move = move_list->moves[i];
 
-      char *capture = get_move_capture_flag(move) ? "capture   " : "\0";
-      char *castling_f = get_move_castling_flag(move) ? "castle   " : "\0";
+      char *capture = get_move_capture_flag(move) ? "capture   " : "";
+      char *castling_f = get_move_castling_flag(move) ? "castle   " : "";
       char *en_passant_f =
-          get_move_en_passant_flag(move) ? "en_passant   " : "\0";
+          get_move_en_passant_flag(move) ? "en_passant   " : "";
       char *double_push =
-          get_move_double_push_flag(move) ? "double push   " : "\0";
-      char *out = malloc(sizeof(capture) + sizeof(castling_f) +
-                         sizeof(en_passant_f) + sizeof(double_push));
+          get_move_double_push_flag(move) ? "double push   " : "";
 
-      strcpy(out, capture);
+
+      size_t len = strlen(capture) + strlen(castling_f) + strlen(en_passant_f) + strlen(double_push) + 1;
+      char *out = malloc(len);
+      if (!out) { perror("malloc"); exit(EXIT_FAILURE); }
+      out[0] = '\0';
+      strcat(out, capture);
       strcat(out, castling_f);
       strcat(out, en_passant_f);
       strcat(out, double_push);
@@ -1144,6 +1173,8 @@ static inline void print_move_list(Moves *move_list) {
              square_to_notation[get_move_source(move)],
              square_to_notation[get_move_target(move)],
              ascii_promoted_pieces[get_move_promoted_piece(move)], out);
+
+      free(out);
     }
 
     printf("\n\033[1;94mMoves: \033[1;93m%d\033[0;0m\n\n", move_list->count);
@@ -1196,6 +1227,7 @@ static inline void generate_moves(Moves *moves_list) {
           attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
+            if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
             // pawn capture promotion move
             if (src_sqr >= a7 && src_sqr <= h7) {
               add_move(moves_list,
@@ -1288,6 +1320,7 @@ static inline void generate_moves(Moves *moves_list) {
           attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
+            if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
             // pawn capture promotion move
             if (src_sqr >= a2 && src_sqr <= h2) {
               add_move(moves_list,
@@ -1352,6 +1385,7 @@ static inline void generate_moves(Moves *moves_list) {
         attacks = knight_attacks[src_sqr] & ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
+          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
           // quiet move
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
@@ -1374,6 +1408,7 @@ static inline void generate_moves(Moves *moves_list) {
                   ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
+          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
           // quiet move
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
@@ -1396,6 +1431,7 @@ static inline void generate_moves(Moves *moves_list) {
                   ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
+          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
           // quiet move
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
@@ -1418,6 +1454,7 @@ static inline void generate_moves(Moves *moves_list) {
                   ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
+          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
           // quiet move
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
@@ -1439,6 +1476,7 @@ static inline void generate_moves(Moves *moves_list) {
         attacks = king_attacks[src_sqr] & ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
+          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
           // quiet move
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
@@ -1476,6 +1514,7 @@ static inline void generate_capture_moves(Moves *moves_list) {
           attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
+            if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
             // pawn capture promotion move
             if (src_sqr >= a7 && src_sqr <= h7) {
               add_move(moves_list,
@@ -1517,6 +1556,7 @@ static inline void generate_capture_moves(Moves *moves_list) {
           attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
+            if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
             // pawn capture promotion move
             if (src_sqr >= a2 && src_sqr <= h2) {
               add_move(moves_list,
@@ -1687,6 +1727,16 @@ static inline int make_move(int move, int move_flag) {
     int double_push_flag = get_move_double_push_flag(move);
     int en_passant_flag = get_move_en_passant_flag(move);
 
+    if (source_sqr < 0 || source_sqr >= 64 ||
+      target_sqr < 0 || target_sqr >= 64 ||
+      piece < 0 || piece >= 12) {
+
+      /* restore board state to be safe (we did COPY_BOARD earlier) */
+      RESTORE_BOARD();
+
+      return 0; /* illegal / malformed move */
+    }
+
     // move piece
     pop_bit(bitboards[piece], source_sqr);
 
@@ -1757,16 +1807,28 @@ static inline int make_move(int move, int move_flag) {
 
     side_to_move ^= 1;
 
-    if (is_square_attacked_by((side_to_move == white)
-                                  ? get_lsb_index(bitboards[bK])
-                                  : get_lsb_index(bitboards[wK]),
-                              side_to_move)) {
-      RESTORE_BOARD();
-      return 0; // return illegal move
+   int king_sq;
+    if (side_to_move == white) {
+      /* we just flipped side_to_move, so check black king */
+      king_sq = get_lsb_index(bitboards[bK]);
     } else {
-      return 1; // return legal move
+      king_sq = get_lsb_index(bitboards[wK]);
     }
-  }
+
+    /* if king missing (bitboard unexpectedly zero), treat move as illegal */
+    if (king_sq < 0) {
+      /* Defensive: restore prior state and fail the move */
+      RESTORE_BOARD();
+      return 0;
+    }
+
+    /* only now call is_square_attacked_by */
+    if (is_square_attacked_by(king_sq, side_to_move)) {
+      RESTORE_BOARD();
+      return 0; /* illegal move (king in check) */
+    } else {
+      return 1; /* legal */
+    }  }
 
   // capture moves
   else {
@@ -2114,29 +2176,36 @@ static inline int score_move(int move) {
   return 0;
 }
 
-static inline int sort_moves(Moves * ml) {
-  int scores[ml -> count];
+static inline int sort_moves(Moves *ml) {
+  if (!ml) return 0;
+  if (ml->count <= 1) return 1; /* nothing to sort */
 
-  for(int i= 0; i < ml->count; i++) {
+  /* safe: allocate an array on heap sized to ml->count (or use a fixed max) */
+  int *scores = malloc(sizeof(int) * ml->count);
+  if (!scores) return 0; /* OOM - leave unsorted */
+
+  for (int i = 0; i < ml->count; i++) {
     scores[i] = score_move(ml->moves[i]);
   }
 
-  for(int i = 1; i < ml->count; i++) {
+  /* insertion sort using scores[] */
+  for (int i = 1; i < ml->count; i++) {
     int key_score = scores[i];
     int key_move = ml->moves[i];
-    int j = i-1;
+    int j = i - 1;
 
-    for(; j >=0 && scores[j] < key_score; j--) {
-      scores[j+1] = scores[j];
-      ml->moves[j+1] = ml->moves[j];
+    while (j >= 0 && scores[j] < key_score) {
+      scores[j + 1] = scores[j];
+      ml->moves[j + 1] = ml->moves[j];
+      j--;
     }
 
-    scores[j+1] = key_score;
-    ml->moves[j+1] = key_move;
+    scores[j + 1] = key_score;
+    ml->moves[j + 1] = key_move;
   }
 
+  free(scores);
   return 1;
-
 }
 
 void print_moves_score(Moves* ml) {
@@ -2163,6 +2232,7 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 
   Moves ml;
   generate_capture_moves(&ml);
+  sort_moves(&ml);
 
   for (int i = 0; i < ml.count; i++) {
     COPY_BOARD();
@@ -2433,7 +2503,7 @@ int main(void) {
   parse_fen(killer_position);
   print_board(1);
 
-  search_position(7);
+  uci_loop();
 
   return 0;
 }
