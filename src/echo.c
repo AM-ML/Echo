@@ -115,8 +115,11 @@ const U64 not_rank_8 = 18446744073709551360ULL;
   (get_bit((bitboard), (square)) ? ((bitboard) -= 1ULL << (square)) : 0)
 #define count_bits(bitboard) (__builtin_popcountll(bitboard))
 #define get_lsb(bitboard) ((bitboard) & -(bitboard))
-#define get_tz(bitboard) (((bitboard) & -(bitboard)) - 1)
-#define get_lsb_index(bitboard) ((bitboard) ? count_bits(get_tz(bitboard)) : -1)
+
+static inline int get_lsb_index(U64 bitboard) {
+  return bitboard ? __builtin_ctzll(bitboard) : -1;
+}
+
 
 void reset_states_and_board() {
   memset(bitboards, 0ULL, 96);
@@ -1154,7 +1157,9 @@ static inline void generate_moves(Moves *moves_list) {
   int src_sqr, dest_sqr;
   U64 position, attacks; // current iteration's piece bitboard & its attacks map
 
-  for (int piece = wP; piece <= bK; piece++) {
+  int base = side_to_move == white? wP : bP;
+  for (int i = 0; i < 6; i++) {
+    int piece = base + i;
     position = bitboards[piece];
 
     // generating pawn moves & castling move system
@@ -1451,6 +1456,187 @@ static inline void generate_moves(Moves *moves_list) {
   }
 }
 
+static inline void generate_capture_moves(Moves *moves_list) {
+  moves_list->count = 0;
+  int src_sqr, dest_sqr;
+  U64 position, attacks; // current iteration's piece bitboard & its attacks map
+
+  int base = side_to_move == white? wP : bP;
+  for (int i = 0; i < 6; i++) {
+    int piece = base + i;
+    position = bitboards[piece];
+
+    // generating pawn capture moves
+    if (side_to_move == white) {
+      if (piece == wP) {
+        while (position) {
+          src_sqr = get_lsb_index(position);
+
+          // Only pawn captures (no quiet moves)
+          attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
+          while (attacks) {
+            dest_sqr = get_lsb_index(attacks);
+            // pawn capture promotion move
+            if (src_sqr >= a7 && src_sqr <= h7) {
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, wP, wQ, 1, 0, 0, 0));
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, wP, wR, 1, 0, 0, 0));
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, wP, wB, 1, 0, 0, 0));
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, wP, wN, 1, 0, 0, 0));
+            }
+            // regular pawn capture move
+            else {
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, wP, 0, 1, 0, 0, 0));
+            }
+            pop_bit(attacks, dest_sqr);
+          }
+
+          // en passant capture
+          if (en_passant != no_square) {
+            U64 can_en_passant =
+                pawn_attacks[white][src_sqr] & (1ULL << en_passant);
+
+            if (can_en_passant && get_bit(bitboards[bP], en_passant + 8)) {
+              add_move(moves_list,
+                       encode_move(src_sqr, en_passant, wP, 0, 1, 0, 1, 0));
+            }
+          }
+          pop_bit(position, src_sqr);
+        }
+      }
+    } else {
+      if (piece == bP) {
+        while (position) {
+          src_sqr = get_lsb_index(position);
+
+          // Only pawn captures (no quiet moves)
+          attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
+          while (attacks) {
+            dest_sqr = get_lsb_index(attacks);
+            // pawn capture promotion move
+            if (src_sqr >= a2 && src_sqr <= h2) {
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, bP, bQ, 1, 0, 0, 0));
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, bP, bR, 1, 0, 0, 0));
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, bP, bB, 1, 0, 0, 0));
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, bP, bN, 1, 0, 0, 0));
+            }
+            // regular pawn capture move
+            else {
+              add_move(moves_list,
+                       encode_move(src_sqr, dest_sqr, bP, 0, 1, 0, 0, 0));
+            }
+            pop_bit(attacks, dest_sqr);
+          }
+
+          // en passant capture
+          if (en_passant != no_square) {
+            U64 can_en_passant =
+                pawn_attacks[black][src_sqr] & (1ULL << en_passant);
+
+            if (can_en_passant && get_bit(bitboards[wP], en_passant - 8)) {
+              add_move(moves_list,
+                       encode_move(src_sqr, en_passant, bP, 0, 1, 0, 1, 0));
+            }
+          }
+          pop_bit(position, src_sqr);
+        }
+      }
+    }
+
+    // knight captures only
+    if ((side_to_move == white) ? piece == wN : piece == bN) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        // Only attacks that hit enemy pieces (captures)
+        attacks = knight_attacks[src_sqr] & sides_occupancies[side_to_move == white ? black : white];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          add_move(moves_list,
+                   encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+
+    // bishop captures only
+    if ((side_to_move == white) ? piece == wB : piece == bB) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        // Only attacks that hit enemy pieces (captures)
+        attacks = get_bishop_attacks(src_sqr, sides_occupancies[both]) &
+                  sides_occupancies[side_to_move == white ? black : white];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          add_move(moves_list,
+                   encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+
+    // rook captures only
+    if ((side_to_move == white) ? piece == wR : piece == bR) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        // Only attacks that hit enemy pieces (captures)
+        attacks = get_rook_attacks(src_sqr, sides_occupancies[both]) &
+                  sides_occupancies[side_to_move == white ? black : white];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          add_move(moves_list,
+                   encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+
+    // queen captures only
+    if ((side_to_move == white) ? piece == wQ : piece == bQ) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        // Only attacks that hit enemy pieces (captures)
+        attacks = get_queen_attacks(src_sqr, sides_occupancies[both]) &
+                  sides_occupancies[side_to_move == white ? black : white];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          add_move(moves_list,
+                   encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+
+    // king captures only (no castling)
+    if ((side_to_move == white) ? piece == wK : piece == bK) {
+      while (position) {
+        src_sqr = get_lsb_index(position);
+        // Only attacks that hit enemy pieces (captures)
+        attacks = king_attacks[src_sqr] & sides_occupancies[side_to_move == white ? black : white];
+        while (attacks) {
+          dest_sqr = get_lsb_index(attacks);
+          add_move(moves_list,
+                   encode_move(src_sqr, dest_sqr, piece, 0, 1, 0, 0, 0));
+          pop_bit(attacks, dest_sqr);
+        }
+        pop_bit(position, src_sqr);
+      }
+    }
+  }
+}
+
+
 /* **********************
 1111 = qkQK = 15
 wK    moved = 1111 & 1100 = 12
@@ -1692,168 +1878,156 @@ void perft_test(int depth) {
   }
 }
 
-
-int pst_score[12][64] = {
-
-/* White Pawn */
-{
-     0,   0,   0,   0,   0,   0,   0,   0,
+const int pst_score[12][64] = {
+  // White pawn
+  {
+    90,  90,  90,  90,  90,  90,  90,  90,
+    30,  30,  30,  40,  40,  30,  30,  30,
+    20,  20,  20,  30,  30,  30,  20,  20,
+    10,  10,  10,  20,  20,  10,  10,  10,
+    5,   5,  10,  20,  20,   5,   5,   5,
+    0,   0,   0,   5,   5,   0,   0,   0,
+    0,   0,   0, -10, -10,   0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0
+  },
+  // White knight
+  {
+    -5,   0,   0,   0,   0,   0,   0,  -5,
+    -5,   0,   0,  10,  10,   0,   0,  -5,
+    -5,   5,  20,  20,  20,  20,   5,  -5,
+    -5,  10,  20,  30,  30,  20,  10,  -5,
+    -5,  10,  20,  30,  30,  20,  10,  -5,
+    -5,   5,  20,  10,  10,  20,   5,  -5,
+    -5,   0,   0,   0,   0,   0,   0,  -5,
+    -5, -10,   0,   0,   0,   0, -10,  -5
+  },
+  // White bishop
+  {
+    0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0,
+    0,  20,   0,  10,  10,   0,  20,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,  10,   0,   0,   0,   0,  10,   0,
+    0,  30,   0,   0,   0,   0,  30,   0,
+    0,   0, -10,   0,   0, -10,   0,   0
+  },
+  // White rook
+  {
     50,  50,  50,  50,  50,  50,  50,  50,
-    10,  10,  20,  30,  30,  20,  10,  10,
-     5,   5,  10,  25,  25,  10,   5,   5,
-     0,   0,   0,  20,  20,   0,   0,   0,
-     5,  -5, -10,   0,   0, -10,  -5,   5,
-     5,  10,  10, -20, -20,  10,  10,   5,
-     0,   0,   0,   0,   0,   0,   0,   0
-},
-
-/* White Knight */
-{
-   -50, -40, -30, -30, -30, -30, -40, -50,
-   -40, -20,   0,   5,   5,   0, -20, -40,
-   -30,   5,  10,  15,  15,  10,   5, -30,
-   -30,   0,  15,  20,  20,  15,   0, -30,
-   -30,   5,  15,  20,  20,  15,   5, -30,
-   -30,   0,  10,  15,  15,  10,   0, -30,
-   -40, -20,   0,   0,   0,   0, -20, -40,
-   -50, -40, -30, -30, -30, -30, -40, -50
-},
-
-/* White Bishop */
-{
-   -20, -10, -10, -10, -10, -10, -10, -20,
-   -10,   5,   0,   0,   0,   0,   5, -10,
-   -10,  10,  10,  10,  10,  10,  10, -10,
-   -10,   0,  10,  10,  10,  10,   0, -10,
-   -10,   5,   5,  10,  10,   5,   5, -10,
-   -10,   0,   5,  10,  10,   5,   0, -10,
-   -10,   0,   0,   0,   0,   0,   0, -10,
-   -20, -10, -10, -10, -10, -10, -10, -20
-},
-
-/* White Rook */
-{
-     0,   0,   0,   5,   5,   0,   0,   0,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-     5,  10,  10,  10,  10,  10,  10,   5,
-     0,   0,   0,   0,   0,   0,   0,   0
-},
-
-/* White Queen */
-{
-   -20, -10, -10,  -5,  -5, -10, -10, -20,
-   -10,   0,   0,   0,   0,   0,   0, -10,
-   -10,   0,   5,   5,   5,   5,   0, -10,
-    -5,   0,   5,   5,   5,   5,   0,  -5,
-     0,   0,   5,   5,   5,   5,   0,  -5,
-   -10,   5,   5,   5,   5,   5,   0, -10,
-   -10,   0,   5,   0,   0,   0,   0, -10,
-   -20, -10, -10,  -5,  -5, -10, -10, -20
-},
-
-/* White King (middlegame) */
-{
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -20, -30, -30, -40, -40, -30, -30, -20,
-   -10, -20, -20, -20, -20, -20, -20, -10,
-    20,  20,   0,   0,   0,   0,  20,  20,
-    20,  30,  10,   0,   0,  10,  30,  20
-},
-
-/* Black Pawn */
-{
-     0,   0,   0,   0,   0,   0,   0,   0,
-     5,  10,  10, -20, -20,  10,  10,   5,
-     5,  -5, -10,   0,   0, -10,  -5,   5,
-     0,   0,   0,  20,  20,   0,   0,   0,
-     5,   5,  10,  25,  25,  10,   5,   5,
-    10,  10,  20,  30,  30,  20,  10,  10,
     50,  50,  50,  50,  50,  50,  50,  50,
-     0,   0,   0,   0,   0,   0,   0,   0
-},
-
-/* Black Knight */
-{
-   -50, -40, -30, -30, -30, -30, -40, -50,
-   -40, -20,   0,   0,   0,   0, -20, -40,
-   -30,   0,  10,  15,  15,  10,   0, -30,
-   -30,   5,  15,  20,  20,  15,   5, -30,
-   -30,   0,  15,  20,  20,  15,   0, -30,
-   -30,   5,  10,  15,  15,  10,   5, -30,
-   -40, -20,   0,   5,   5,   0, -20, -40,
-   -50, -40, -30, -30, -30, -30, -40, -50
-},
-
-/* Black Bishop */
-{
-   -20, -10, -10, -10, -10, -10, -10, -20,
-   -10,   0,   0,   0,   0,   0,   0, -10,
-   -10,   0,   5,  10,  10,   5,   0, -10,
-   -10,   5,   5,  10,  10,   5,   5, -10,
-   -10,   0,  10,  10,  10,  10,   0, -10,
-   -10,  10,  10,  10,  10,  10,  10, -10,
-   -10,   5,   0,   0,   0,   0,   5, -10,
-   -20, -10, -10, -10, -10, -10, -10, -20
-},
-
-/* Black Rook */
-{
-     0,   0,   0,   0,   0,   0,   0,   0,
-     5,  10,  10,  10,  10,  10,  10,   5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-     0,   0,   0,   5,   5,   0,   0,   0
-},
-
-/* Black Queen */
-{
-   -20, -10, -10,  -5,  -5, -10, -10, -20,
-   -10,   0,   0,   0,   0,   0,   0, -10,
-   -10,   0,   5,   0,   0,   0,   0, -10,
-   -10,   5,   5,   5,   5,   5,   0, -10,
-     0,   0,   5,   5,   5,   5,   0,  -5,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,   0,  20,  20,   0,   0,   0
+  },
+  // White queen
+  {
+    -20, -10, -10,  -5,  -5, -10, -10, -20,
+    -10,   0,   0,   0,   0,   0,   0, -10,
+    -10,   0,   5,   5,   5,   5,   0, -10,
     -5,   0,   5,   5,   5,   5,   0,  -5,
-   -10,   0,   5,   5,   5,   5,   0, -10,
-   -20, -10, -10,  -5,  -5, -10, -10, -20
-},
-
-/* Black King (middlegame) */
-{
-    20,  30,  10,   0,   0,  10,  30,  20,
-    20,  20,   0,   0,   0,   0,  20,  20,
-   -10, -20, -20, -20, -20, -20, -20, -10,
-   -20, -30, -30, -40, -40, -30, -30, -20,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30,
-   -30, -40, -40, -50, -50, -40, -40, -30
-}
-
+    0,   0,   5,   5,   5,   5,   0,  -5,
+    -10,   5,   5,   5,   5,   5,   0, -10,
+    -10,   0,   5,   0,   0,   0,   0, -10,
+    -20, -10, -10,  -5,  -5, -10, -10, -20
+  },
+  // White king
+  {
+    0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   5,   5,   5,   5,   0,   0,
+    0,   5,   5,  10,  10,   5,   5,   0,
+    0,   5,  10,  20,  20,  10,   5,   0,
+    0,   5,  10,  20,  20,  10,   5,   0,
+    0,   0,   5,  10,  10,   5,   0,   0,
+    0,   5,   5,  -5,  -5,   0,   5,   0,
+    0,   0,   5,   0, -15,   0,  10,   0
+  },
+  // Black pawn (mirrored white pawn)
+  {
+    0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0, -10, -10,   0,   0,   0,
+    0,   0,   0,   5,   5,   0,   0,   0,
+    5,   5,  10,  20,  20,   5,   5,   5,
+    10,  10,  10,  20,  20,  10,  10,  10,
+    20,  20,  20,  30,  30,  30,  20,  20,
+    30,  30,  30,  40,  40,  30,  30,  30,
+    90,  90,  90,  90,  90,  90,  90,  90
+  },
+  // Black knight (mirrored white knight)
+  {
+    -5, -10,   0,   0,   0,   0, -10,  -5,
+    -5,   0,   0,   0,   0,   0,   0,  -5,
+    -5,   5,  20,  10,  10,  20,   5,  -5,
+    -5,  10,  20,  30,  30,  20,  10,  -5,
+    -5,  10,  20,  30,  30,  20,  10,  -5,
+    -5,   5,  20,  20,  20,  20,   5,  -5,
+    -5,   0,   0,  10,  10,   0,   0,  -5,
+    -5,   0,   0,   0,   0,   0,   0,  -5
+  },
+  // Black bishop (mirrored white bishop)
+  {
+    0,   0, -10,   0,   0, -10,   0,   0,
+    0,  30,   0,   0,   0,   0,  30,   0,
+    0,  10,   0,   0,   0,   0,  10,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,  20,   0,  10,  10,   0,  20,   0,
+    0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0
+  },
+  // Black rook (mirrored white rook)
+  {
+    0,   0,   0,  20,  20,   0,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    0,   0,  10,  20,  20,  10,   0,   0,
+    50,  50,  50,  50,  50,  50,  50,  50,
+    50,  50,  50,  50,  50,  50,  50,  50
+  },
+  /* Black Queen */
+  {
+    -20, -10, -10,  -5,  -5, -10, -10, -20,
+    -10,   0,   0,   0,   0,   0,   0, -10,
+    -10,   0,   5,   0,   0,   0,   0, -10,
+    -10,   5,   5,   5,   5,   5,   0, -10,
+    0,   0,   5,   5,   5,   5,   0,  -5,
+    -5,   0,   5,   5,   5,   5,   0,  -5,
+    -10,   0,   5,   5,   5,   5,   0, -10,
+    -20, -10, -10,  -5,  -5, -10, -10, -20
+  },
+  // Black king (mirrored white king)
+  {
+    0,   0,  10,   0, -15,   0,   5,   0,
+    0,   5,   0,  -5,  -5,   5,   5,   0,
+    0,   0,   5,  10,  10,   5,   0,   0,
+    0,   5,  10,  20,  20,  10,   5,   0,
+    0,   5,  10,  20,  20,  10,   5,   0,
+    0,   5,   5,  10,  10,   5,   5,   0,
+    0,   0,   5,   5,   5,   5,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0
+  }
 };
 
 
+
+
 int material_score[12] = {
-     230, // wP eval
-     817, // N
-     870, // B
-    1330, // R
-    2610, // Q
-   10000, // K
-    -230, // bP
-    -817, // n
-    -870, // b
-   -1330, // r
-   -2610, // q
+  230, // wP eval
+  817, // N
+  870, // B
+  1330, // R
+  2610, // Q
+  10000, // K
+  -230, // bP
+  -817, // n
+  -870, // b
+  -1330, // r
+  -2610, // q
   -10000  // k
 };
 
@@ -1904,22 +2078,37 @@ static inline int eval() {
 int ply;  // half-move counter
 int best_move;
 
-static inline int score_move(int move) {
-  if(get_move_capture_flag(move)) { // capture move, mvv_lva lt
-    int target_piece = wP;
-    int start_piece = side_to_move == white ? bP : wP;
-    int end_piece = side_to_move == white ? bK : wK;
+int killer_moves[2][128]; // [side][ply]
+int history_moves[12][64]; // [piece][square]
 
-    for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
-      if (get_bit(bitboards[bb_piece], get_move_target(move))) {
-        target_piece = bb_piece;
-        break;
+
+
+static inline int score_move(int move) {
+  if(get_move_capture_flag(move)) {
+    int target_piece = wP;  // Default for en passant
+
+    if (get_move_en_passant_flag(move)) {
+      // En passant always captures a pawn
+      target_piece = (side_to_move == white) ? bP : wP;
+    } else {
+      int start_piece = side_to_move == white ? bP : wP;
+      int end_piece = side_to_move == white ? bK : wK;
+
+      for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
+        if (get_bit(bitboards[bb_piece], get_move_target(move))) {
+          target_piece = bb_piece;
+          break;
+        }
       }
     }
 
+    return mvv_lva[get_move_piece(move)][target_piece] + 10000;
+  }
+  else { // killer, quiet
+    if (killer_moves[0][ply] == move) return 9000;
+    else if (killer_moves[1][ply] == move) return 8000;
+    else return history_moves[get_move_piece(move)][get_move_target(move)];
 
-    return mvv_lva[get_move_piece(move)][target_piece]; // return mvv_lva score
-  } else { // score quiet move
   }
 
   return 0;
@@ -1961,44 +2150,49 @@ void print_moves_score(Moves* ml) {
   }
 }
 
-static inline int quiescence_search(int alpha, int beta) {
+
+static inline int quiescence_search(int alpha, int beta, int qs_depth) {
   nodes++;
+
+  if(qs_depth <= -10) { return eval(); }
+
   int evaluation = eval();
 
-  if(alpha >= beta) return beta;
-  if(evaluation > alpha) {
-    alpha = evaluation;
-  }
+  if (alpha >= beta) return beta;
+  if (evaluation > alpha) alpha = evaluation;
 
-  Moves ml[1];
-  generate_moves(ml);
+  Moves ml;
+  generate_capture_moves(&ml);
 
-  for(int i = 0; i < ml -> count; i++) {
+  for (int i = 0; i < ml.count; i++) {
     COPY_BOARD();
-
     ply++;
 
-    if(make_move(ml -> moves[i], allow_only_captures) == 0) {
+    if (make_move(ml.moves[i], allow_only_captures) == 0) {
       ply--;
       continue;
     }
 
-    int score = -quiescence_search(-beta, -alpha);
-    ply --;
+    int score = -quiescence_search(-beta, -alpha, qs_depth - 1);
+    ply--;
     RESTORE_BOARD();
 
-    if(score > alpha) {
+    if (score > alpha) {
       alpha = score;
     }
-    if(alpha >= beta) return beta;
+    if (alpha >= beta) {
+      return beta;
+    }
   }
 
   return alpha;
 }
 
+
+
 static inline int negamax(int alpha, int beta, int depth) {
   if (depth == 0) {
-    return quiescence_search(alpha, beta);
+    return quiescence_search(alpha, beta, 0);
   }
 
   nodes++;
@@ -2006,6 +2200,9 @@ static inline int negamax(int alpha, int beta, int depth) {
   int in_check = is_square_attacked_by(
     (side_to_move == white? get_lsb_index(bitboards[wK]):
     get_lsb_index(bitboards[bK])), side_to_move ^ 1);
+
+  // if (in_check) depth++; // increase depth in critical positions
+
   int legal_moves = 0;
 
   Moves ml[1];
@@ -2039,8 +2236,13 @@ static inline int negamax(int alpha, int beta, int depth) {
       alpha = score;
 
       if (ply == 0) cur_best_move = ml -> moves[i];
+      history_moves[get_move_piece(ml -> moves[i])][get_move_target(ml -> moves[i])] += depth;
     }
-    if(alpha >= beta) return beta;
+    if(alpha >= beta) { // if best move can be defended
+      killer_moves[1][ply] = killer_moves[0][ply]; // store prev best killer move
+      killer_moves[0][ply] = ml -> moves[i]; // store best move to evaluate in another position
+      return beta;
+    }
   }
 
   if(legal_moves == 0) {
@@ -2228,11 +2430,10 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(tricky_position);
+  parse_fen(killer_position);
   print_board(1);
 
-  uci_loop();
-
+  search_position(7);
 
   return 0;
 }
