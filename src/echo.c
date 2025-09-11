@@ -2167,14 +2167,15 @@ static inline int eval() {
   return -score;
 }
 
+#define MAX_PLY 64
 
 int ply;  // half-move counter
 
-int killer_moves[2][128]; // [side][ply]
-int history_moves[12][64]; // [piece][square]
+int killer_moves[2][MAX_PLY]; // [side][ply]
+int history_moves[12][MAX_PLY]; // [piece][square]
 
-int pv_length[64];
-int pv_table[64][64];
+int pv_length[MAX_PLY];
+int pv_table[MAX_PLY][MAX_PLY];
 
 
 static inline int score_move(int move) {
@@ -2300,6 +2301,8 @@ static inline int negamax(int alpha, int beta, int depth) {
     return quiescence_search(alpha, beta, 0);
   }
 
+  if(ply >= MAX_PLY) return eval(); // very rare occurrance
+
   nodes++;
 
   int in_check = is_square_attacked_by(
@@ -2366,13 +2369,20 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 void search_position(int depth) {
   nodes = 0;
-  int score = negamax(NEG_INF, INF, depth);
+  int score = 0;
 
-  printf("info score cp %d depth %d nodes %ld pv ", side_to_move^1? score : -score, depth, nodes);
-  for(int i = 0; i < pv_length[0]; i++) {
-    printf("%s ", get_move_str(pv_table[0][i]));
+  memset(killer_moves, 0, sizeof(killer_moves));
+  memset(history_moves, 0, sizeof(history_moves));
+  memset(pv_table, 0, sizeof(pv_table));
+  memset(pv_length, 0, sizeof(pv_length));
+
+  for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
+    score = negamax(NEG_INF, INF, cur_depth);
+
+    printf("info score cp %d depth %d nodes %ld pv ", side_to_move^1? score : -score, cur_depth, nodes);
+    for (int i = 0; i < pv_length[0]; i++) printf("%s ", get_move_str(pv_table[0][i]));
+    printf("\nbestmove "); print_move(pv_table[0][0]);
   }
-  printf("\nbestmove "); print_move(pv_table[0][0]);
 }
 
 
