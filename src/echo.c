@@ -354,117 +354,118 @@ void print_bitboard_piece(int piece_square, U64 bitboard) {
 }
 
 void print_board(int flag) {
-
 #if defined(_WIN32) || defined(_WIN64)
-  flag = 0;
-  printf("\nPosition: %llu\n", sides_occupancies[both]);
+    flag = 0;
+    printf("\nPosition: %llu\n", sides_occupancies[both]);
 #else
-  printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m",
-         sides_occupancies[both]);
-  printf("\n\033[1;93mCastling: \033[1;95m%c%c%c%c\033[0;0m",
-         can_castle & WCK ? 'K' : '_', can_castle & WCQ ? 'Q' : '_',
-         can_castle & BCK ? 'k' : '_', can_castle & BCQ ? 'q' : '_');
-  printf("\n\033[1;93mEn Passant: \033[1;95m%s\033[0;0m\n\n",
-         en_passant != no_square ? square_to_notation[en_passant] : "_");
-  side_to_move != -1 &&
-      printf("%s\033[1;93m To Move\033[0;0m\n",
-             side_to_move == white ? "\033[1;96mWhite" : "\033[1;91mBlack");
+    printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m",
+           sides_occupancies[both]);
+    printf("\n\033[1;93mCastling: \033[1;95m%c%c%c%c\033[0;0m",
+           can_castle & WCK ? 'K' : '_', can_castle & WCQ ? 'Q' : '_',
+           can_castle & BCK ? 'k' : '_', can_castle & BCQ ? 'q' : '_');
+    printf("\n\033[1;93mEn Passant: \033[1;95m%s\033[0;0m\n\n",
+           en_passant != no_square ? square_to_notation[en_passant] : "_");
+    side_to_move != -1 &&
+        printf("%s\033[1;93m To Move\033[0;0m\n",
+               side_to_move == white ? "\033[1;96mWhite" : "\033[36mBlack");
 #endif
 
-  if (flag) {
     for (int rank = 0; rank < 8; rank++) {
-      printf("\033[1;93m%d|  \033[0;0m", 8 - rank); // for navigation
-      for (int file = 0; file < 8; file++) {
-        int square = RF_2SQ(rank, file);
-        char *c = ".";
-        char *color = "\033[1;91m";
-
-        if (get_bit(sides_occupancies[both], square)) {
-          color = "\033[1;96m";
-
-          if (get_bit(bitboards[wP], square))
-            c = unicode_pieces[wP];
-          else if (get_bit(bitboards[wB], square))
-            c = unicode_pieces[wB];
-          else if (get_bit(bitboards[wN], square))
-            c = unicode_pieces[wN];
-          else if (get_bit(bitboards[wR], square))
-            c = unicode_pieces[wR];
-          else if (get_bit(bitboards[wQ], square))
-            c = unicode_pieces[wQ];
-          else if (get_bit(bitboards[wK], square))
-            c = unicode_pieces[wK];
-
-          else {
-            if (get_bit(bitboards[bP], square))
-              c = unicode_pieces[bP];
-            else if (get_bit(bitboards[bB], square))
-              c = unicode_pieces[bB];
-            else if (get_bit(bitboards[bN], square))
-              c = unicode_pieces[bN];
-            else if (get_bit(bitboards[bR], square))
-              c = unicode_pieces[bR];
-            else if (get_bit(bitboards[bQ], square))
-              c = unicode_pieces[bQ];
-            else if (get_bit(bitboards[bK], square))
-              c = unicode_pieces[bK];
-          }
+        // top border of row
+        printf("   ");
+        for (int file = 0; file < 8; file++) {
+            printf("\033[1;0m+\033[0;0m\033[1;0m---\033[0;0m");
         }
+        printf("\033[1;0m+\033[0;0m\n");
 
-        printf("%s%s ", color, c);
-      }
-      printf("\n");
-    }
-    printf("    \033[1;93m_______________\n");
-    printf("    A B C D E F G H\033[0;0m\n"); // for navigation
-  } else {
-    for (int rank = 0; rank < 8; rank++) {
-      printf("\033[1;93m%d|  \033[0;0m", 8 - rank); // for navigation
-      for (int file = 0; file < 8; file++) {
-        int square = RF_2SQ(rank, file);
-        char *c = ".";
-        char *color = "\033[1;91m";
+        // rank label
+        printf(" \033[1;93m%d\033[0;0m \033[1;0m|\033[0;0m", 8 - rank);
 
-        if (get_bit(sides_occupancies[both], square)) {
-          color = "\033[1;96m";
+        // print pieces
+        for (int file = 0; file < 8; file++) {
+            int square = RF_2SQ(rank, file);
+            char *c = " ";   // empty square
+            char *color = ""; // default no color
 
-          if (get_bit(bitboards[wP], square))
-            c = "P";
-          else if (get_bit(bitboards[wB], square))
-            c = "B";
-          else if (get_bit(bitboards[wN], square))
-            c = "N";
-          else if (get_bit(bitboards[wR], square))
-            c = "R";
-          else if (get_bit(bitboards[wQ], square))
-            c = "Q";
-          else if (get_bit(bitboards[wK], square))
-            c = "K";
+            if (get_bit(sides_occupancies[both], square)) {
+                if (flag) {
+                    // Unicode mode with color rules
+                    if (get_bit(bitboards[wP], square))
+                        c = unicode_pieces[wP], color = "\033[1;96m"; // bold cyan
+                    else if (get_bit(bitboards[wB], square))
+                        c = unicode_pieces[wB], color = "\033[1;96m";
+                    else if (get_bit(bitboards[wN], square))
+                        c = unicode_pieces[wN], color = "\033[1;96m";
+                    else if (get_bit(bitboards[wR], square))
+                        c = unicode_pieces[wR], color = "\033[1;96m";
+                    else if (get_bit(bitboards[wQ], square))
+                        c = unicode_pieces[wQ], color = "\033[1;96m";
+                    else if (get_bit(bitboards[wK], square))
+                        c = unicode_pieces[wK], color = "\033[1;96m";
 
-          else {
-            if (get_bit(bitboards[bP], square))
-              c = "p";
-            else if (get_bit(bitboards[bB], square))
-              c = "b";
-            else if (get_bit(bitboards[bN], square))
-              c = "n";
-            else if (get_bit(bitboards[bR], square))
-              c = "r";
-            else if (get_bit(bitboards[bQ], square))
-              c = "q";
-            else if (get_bit(bitboards[bK], square))
-              c = "k";
-          }
+                    else if (get_bit(bitboards[bP], square))
+                        c = unicode_pieces[bP], color = "\033[36m"; // plain cyan
+                    else if (get_bit(bitboards[bB], square))
+                        c = unicode_pieces[bB], color = "\033[36m";
+                    else if (get_bit(bitboards[bN], square))
+                        c = unicode_pieces[bN], color = "\033[36m";
+                    else if (get_bit(bitboards[bR], square))
+                        c = unicode_pieces[bR], color = "\033[36m";
+                    else if (get_bit(bitboards[bQ], square))
+                        c = unicode_pieces[bQ], color = "\033[36m";
+                    else if (get_bit(bitboards[bK], square))
+                        c = unicode_pieces[bK], color = "\033[36m";
+                } else {
+                    // ASCII mode (plain)
+                    if (get_bit(bitboards[wP], square))
+                        c = "P";
+                    else if (get_bit(bitboards[wB], square))
+                        c = "B";
+                    else if (get_bit(bitboards[wN], square))
+                        c = "N";
+                    else if (get_bit(bitboards[wR], square))
+                        c = "R";
+                    else if (get_bit(bitboards[wQ], square))
+                        c = "Q";
+                    else if (get_bit(bitboards[wK], square))
+                        c = "K";
+                    else if (get_bit(bitboards[bP], square))
+                        c = "p";
+                    else if (get_bit(bitboards[bB], square))
+                        c = "b";
+                    else if (get_bit(bitboards[bN], square))
+                        c = "n";
+                    else if (get_bit(bitboards[bR], square))
+                        c = "r";
+                    else if (get_bit(bitboards[bQ], square))
+                        c = "q";
+                    else if (get_bit(bitboards[bK], square))
+                        c = "k";
+                }
+            }
+
+            // print square
+            if (flag)
+                printf(" %s%s\033[0;0m \033[1;0m|\033[0;0m", color, c);
+            else
+                printf(" %s \033[0;0m|", c);
         }
-
-        printf("%s%s ", color, c);
-      }
-      printf("\n");
+        printf("\n");
     }
-    printf("    \033[1;93m_______________\n");
-    printf("    A B C D E F G H\033[0;0m\n"); // for navigation
-  }
+
+    // bottom border
+    printf("   ");
+    for (int file = 0; file < 8; file++) {
+        printf("\033[1;0m+\033[0;0m\033[1;0m---\033[0;0m");
+    }
+    printf("\033[1;0m+\033[0;0m\n");
+
+    // file letters
+    printf("     \033[1;93mA   B   C   D   E   F   G   H\033[0;0m\n");
 }
+
+
+
 
 /**** Attacks ****/
 
@@ -2181,7 +2182,7 @@ static inline int sort_moves(Moves *ml) {
   if (ml->count <= 1) return 1; /* nothing to sort */
 
   /* safe: allocate an array on heap sized to ml->count (or use a fixed max) */
-  int *scores = malloc(sizeof(int) * ml->count);
+  int *scores = malloc(sizeof(int) * (long unsigned int)ml->count);
   if (!scores) return 0; /* OOM - leave unsorted */
 
   for (int i = 0; i < ml->count; i++) {
@@ -2500,10 +2501,9 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(killer_position);
+  parse_fen(start_position);
   print_board(1);
 
-  uci_loop();
 
   return 0;
 }
