@@ -1165,7 +1165,7 @@ static inline void print_move(int move) {
          ascii_promoted_pieces[get_move_promoted_piece(move)]);
 }
 static inline char* get_move_str(int move) {
-  char* buffer = malloc(sizeof(char) * 6);
+  char* buffer = malloc(sizeof(char) * 8);
   snprintf(buffer, sizeof(buffer), "%s%s%c", square_to_notation[get_move_source(move)],
          square_to_notation[get_move_target(move)],
          ascii_promoted_pieces[get_move_promoted_piece(move)]);
@@ -2177,8 +2177,29 @@ int history_moves[12][MAX_PLY]; // [piece][square]
 int pv_length[MAX_PLY];
 int pv_table[MAX_PLY][MAX_PLY];
 
+int apply_pv, pv_score;
+
+
+static inline void enable_pv_scoring(Moves* ml) {
+  apply_pv = 0; // reset pv detection flag
+
+  for(int i = 0; i < ml -> count; i++) {
+    if(pv_table[0][ply] == ml -> moves[i]) {
+      pv_score = 1;
+
+      apply_pv = 1;
+    }
+  }
+}
 
 static inline int score_move(int move) {
+  if (pv_score) { // if pv line can be applied
+    if (pv_table[0][ply] == move) { // check for pv match
+      pv_score = 0; // found the pv, stop searching
+      return 20000; // return highest score
+    }
+  }
+
   if(get_move_capture_flag(move)) {
     int target_piece = wP;  // Default for en passant
 
@@ -2316,7 +2337,12 @@ static inline int negamax(int alpha, int beta, int depth) {
   Moves ml[1];
 
   generate_moves(ml);
+
+  if (apply_pv) {
+    enable_pv_scoring(ml);
+  }
   sort_moves(ml);
+
 
   for(int i = 0; i < ml -> count; i++) {
     COPY_BOARD();
@@ -2368,8 +2394,10 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 
 void search_position(int depth) {
-  nodes = 0;
   int score = 0;
+  nodes = 0;
+  apply_pv = 0;
+  pv_score = 0;
 
   memset(killer_moves, 0, sizeof(killer_moves));
   memset(history_moves, 0, sizeof(history_moves));
@@ -2377,12 +2405,15 @@ void search_position(int depth) {
   memset(pv_length, 0, sizeof(pv_length));
 
   for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
+    nodes = 0; // temporary (disable in production)
+    apply_pv = 1;
     score = negamax(NEG_INF, INF, cur_depth);
 
     printf("info score cp %d depth %d nodes %ld pv ", side_to_move^1? score : -score, cur_depth, nodes);
     for (int i = 0; i < pv_length[0]; i++) printf("%s ", get_move_str(pv_table[0][i]));
-    printf("\nbestmove "); print_move(pv_table[0][0]);
+    printf("\n");
   }
+  printf("bestmove "); print_move(pv_table[0][0]);
 }
 
 
@@ -2547,10 +2578,8 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(tricky_position);
-  print_board(1);
-
-  search_position(6);
+  parse_fen(start_position);
+  uci_loop();
 
 
 
