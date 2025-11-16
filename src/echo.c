@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <unistd.h>
 #if defined(_WIN64) || defined(_WIN32)
 #include <windows.h>
 #else
@@ -1978,10 +1979,10 @@ const int pst_score[12][64] = {
     30,  30,  30,  40,  40,  30,  30,  30,
     20,  20,  20,  30,  30,  30,  20,  20,
     10,  10,  10,  20,  20,  10,  10,  10,
-    5,   5,  10,  20,  20,   5,   5,   5,
-    0,   0,   0,   5,   5,   0,   0,   0,
-    0,   0,   0, -10, -10,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0
+     5,   5,  10,  20,  20,   5,   5,   5,
+     0,   0,   0,   5,   5,   0,   0,   0,
+     0,   0,   0, -10, -10,   0,   0,   0,
+     0,   0,   0,   0,   0,   0,   0,   0
   },
   // White knight
   {
@@ -2009,20 +2010,20 @@ const int pst_score[12][64] = {
   {
     50,  50,  50,  50,  50,  50,  50,  50,
     50,  50,  50,  50,  50,  50,  50,  50,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,   0,  20,  20,   0,   0,   0
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,   0,  20,  20,   0,   0,   0
   },
   // White queen
   {
     -20, -10, -10,  -5,  -5, -10, -10, -20,
     -10,   0,   0,   0,   0,   0,   0, -10,
     -10,   0,   5,   5,   5,   5,   0, -10,
-    -5,   0,   5,   5,   5,   5,   0,  -5,
-    0,   0,   5,   5,   5,   5,   0,  -5,
+     -5,   0,   5,   5,   5,   5,   0,  -5,
+      0,   0,   5,   5,   5,   5,   0,  -5,
     -10,   5,   5,   5,   5,   5,   0, -10,
     -10,   0,   5,   0,   0,   0,   0, -10,
     -20, -10, -10,  -5,  -5, -10, -10, -20
@@ -2040,10 +2041,10 @@ const int pst_score[12][64] = {
   },
   // Black pawn (mirrored white pawn)
   {
-    0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0, -10, -10,   0,   0,   0,
-    0,   0,   0,   5,   5,   0,   0,   0,
-    5,   5,  10,  20,  20,   5,   5,   5,
+     0,   0,   0,   0,   0,   0,   0,   0,
+     0,   0,   0, -10, -10,   0,   0,   0,
+     0,   0,   0,   5,   5,   0,   0,   0,
+     5,   5,  10,  20,  20,   5,   5,   5,
     10,  10,  10,  20,  20,  10,  10,  10,
     20,  20,  20,  30,  30,  30,  20,  20,
     30,  30,  30,  40,  40,  30,  30,  30,
@@ -2073,12 +2074,12 @@ const int pst_score[12][64] = {
   },
   // Black rook (mirrored white rook)
   {
-    0,   0,   0,  20,  20,   0,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,   0,  20,  20,   0,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
+     0,   0,  10,  20,  20,  10,   0,   0,
     50,  50,  50,  50,  50,  50,  50,  50,
     50,  50,  50,  50,  50,  50,  50,  50
   },
@@ -2088,8 +2089,8 @@ const int pst_score[12][64] = {
     -10,   0,   0,   0,   0,   0,   0, -10,
     -10,   0,   5,   0,   0,   0,   0, -10,
     -10,   5,   5,   5,   5,   5,   0, -10,
-    0,   0,   5,   5,   5,   5,   0,  -5,
-    -5,   0,   5,   5,   5,   5,   0,  -5,
+      0,   0,   5,   5,   5,   5,   0,  -5,
+     -5,   0,   5,   5,   5,   5,   0,  -5,
     -10,   0,   5,   5,   5,   5,   0, -10,
     -20, -10, -10,  -5,  -5, -10, -10, -20
   },
@@ -2223,7 +2224,7 @@ static inline int score_move(int move) {
   else { // killer, quiet
     if (killer_moves[0][ply] == move) return 9000;
     else if (killer_moves[1][ply] == move) return 8000;
-    else return history_moves[get_move_piece(move)][get_move_target(move)];
+    else return history_moves[get_move_piece(move)][get_move_target(move)]; // default: 0 else:depth^2
 
   }
 
@@ -2272,9 +2273,155 @@ void print_moves_score(Moves* ml) {
     printf("score: %d\n", score_move(move));
   }
 }
+/**********************************\
+ ==================================
+
+       Time controls variables
+
+ ==================================
+\**********************************/
+
+// exit from engine flag
+int quit = 0;
+
+int movestogo = 30;
+
+int movetime = -1;
+
+int time = -1;
+
+// UCI "inc" command's time increment holder
+int inc = 0;
+
+// UCI "starttime" command time holder
+int starttime = 0;
+
+// UCI "stoptime" command time holder
+int stoptime = 0;
+
+// variable to flag time control availability
+int timeset = 0;
+
+// variable to flag when the time is up
+int stopped = 0;
+
+
+int input_waiting()
+{
+    #ifndef WIN32
+        fd_set readfds;
+        struct timeval tv;
+        FD_ZERO (&readfds);
+        FD_SET (fileno(stdin), &readfds);
+        tv.tv_sec=0; tv.tv_usec=0;
+        select(16, &readfds, 0, 0, &tv);
+
+        return (FD_ISSET(fileno(stdin), &readfds));
+    #else
+        static int init = 0, pipe;
+        static HANDLE inh;
+        DWORD dw;
+
+        if (!init)
+        {
+            init = 1;
+            inh = GetStdHandle(STD_INPUT_HANDLE);
+            pipe = !GetConsoleMode(inh, &dw);
+            if (!pipe)
+            {
+                SetConsoleMode(inh, dw & ~(ENABLE_MOUSE_INPUT|ENABLE_WINDOW_INPUT));
+                FlushConsoleInputBuffer(inh);
+            }
+        }
+
+        if (pipe)
+        {
+           if (!PeekNamedPipe(inh, NULL, 0, NULL, &dw, NULL)) return 1;
+           return dw;
+        }
+
+        else
+        {
+           GetNumberOfConsoleInputEvents(inh, &dw);
+           return dw <= 1 ? 0 : dw;
+        }
+
+    #endif
+}
+
+// read GUI/user input
+void read_input()
+{
+    // bytes to read holder
+    int bytes;
+
+    // GUI/user input
+    char input[256] = "", *endc;
+
+    // "listen" to STDIN
+    if (input_waiting())
+    {
+        // tell engine to stop calculating
+        stopped = 1;
+
+        // loop to read bytes from STDIN
+        do
+        {
+            // read bytes from STDIN
+            bytes=read(fileno(stdin), input, 256);
+        }
+
+        // until bytes available
+        while (bytes < 0);
+
+        // searches for the first occurrence of '\n'
+        endc = strchr(input,'\n');
+
+        // if found new line set value at pointer to 0
+        if (endc) *endc=0;
+
+        // if input is available
+        if (strlen(input) > 0)
+        {
+            // match UCI "quit" command
+            if (strncmp(input, "quit", 4) == 0)
+            {
+                // tell engine to terminate exacution
+                quit = 1;
+            }
+
+            // // match UCI "stop" command
+            else if (strncmp(input, "stop", 4) == 0)    {
+                // tell engine to terminate exacution
+                quit = 1;
+            }
+        }
+    }
+}
+
+// a bridge function to interact between search and GUI input
+static void communicate() {
+	// if time is up break here
+    if(timeset == 1 && get_time_ms() > stoptime) {
+		// tell engine to stop calculating
+		stopped = 1;
+	}
+
+    // read GUI input
+	read_input();
+}
+
 
 
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
+
+  if (stopped == 1) return alpha;
+
+  // every 2047 nodes
+  if((nodes & 2047 ) == 0)
+    // "listen" to the GUI/user input
+    communicate();
+
   nodes++;
 
   if(qs_depth <= -10) { return eval(); }
@@ -2315,6 +2462,13 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 
 
 static inline int negamax(int alpha, int beta, int depth) {
+  if (stopped == 1) return alpha;
+
+  // every 2047 nodes
+  if((nodes & 2047 ) == 0)
+    // "listen" to the GUI/user input
+    communicate();
+
   pv_length[ply] = ply;
 
 
@@ -2344,6 +2498,8 @@ static inline int negamax(int alpha, int beta, int depth) {
   sort_moves(ml);
 
 
+  char found_PV = 0;
+
   for(int i = 0; i < ml -> count; i++) {
     COPY_BOARD();
 
@@ -2357,17 +2513,61 @@ static inline int negamax(int alpha, int beta, int depth) {
 
     legal_moves++;
 
-    int score = -negamax(-beta, -alpha, depth - 1);
+    int move_depth = depth;
+
+    ///*** SEARCH EXTENSIONS ***///
+    int enemy_king_square = (side_to_move == white) ? get_lsb_index(bitboards[bK]) : get_lsb_index(bitboards[wK]);
+    int gives_check = is_square_attacked_by(enemy_king_square, side_to_move); // a tactically critical move requires more searching
+
+    if (in_check || gives_check || get_move_promoted_piece(ml -> moves[i]))
+      move_depth += 1;
+
+    int history_score = history_moves[get_move_piece(ml->moves[i])][get_move_target(ml->moves[i])];
+
+    int eligible_for_lmr = found_PV &&                  // not first move
+      !get_move_capture_flag(ml->moves[i]) &&
+      !in_check &&
+      !gives_check &&
+      !get_move_promoted_piece(ml->moves[i]) &&
+      depth >= 3 && // depth limit
+      history_score < depth * depth * 3; // heuristic check (very aggressive)
+
+    int score;
+    if (eligible_for_lmr) { // apply LMR for quiet moves exclusively
+      int reduced_depth= depth -  (i/2); // LMR, default deepening: -1, i/2: -1 / 2 moves late
+
+      if (reduced_depth < 2) reduced_depth = 2;
+
+      score = -negamax(-alpha-1, -alpha, reduced_depth -1); // LMR null-window search
+
+      if (score > alpha && score < beta)
+        score = -negamax(-beta, -alpha, move_depth-1); // full-window search (non-LMR)
+    }
+    else {
+      if (apply_pv && found_PV) {
+        score = -negamax(-alpha -1, -alpha, move_depth-1); // null-window search
+      }
+      else {
+        score = -negamax(-beta, -alpha, move_depth-1); // full-window search
+      }
+    }
 
     ply --;
 
     RESTORE_BOARD();
 
 
+    if(score >= beta) { // if best move can be defended
+      killer_moves[1][ply] = killer_moves[0][ply]; // store prev best killer move
+      killer_moves[0][ply] = ml -> moves[i]; // store best move to evaluate in another position
+      return beta;
+    }
+
     if(score > alpha) {
       alpha = score;
+      found_PV = 1;
 
-      history_moves[get_move_piece(ml -> moves[i])][get_move_target(ml -> moves[i])] += depth;
+      history_moves[get_move_piece(ml -> moves[i])][get_move_target(ml -> moves[i])] += depth*depth;
 
       pv_table[ply][ply] = ml -> moves[i]; // [ply][ply] -> diagonal / triangular movement
 
@@ -2377,11 +2577,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
       pv_length[ply] = pv_length[ply+1];
     }
-    if(alpha >= beta) { // if best move can be defended
-      killer_moves[1][ply] = killer_moves[0][ply]; // store prev best killer move
-      killer_moves[0][ply] = ml -> moves[i]; // store best move to evaluate in another position
-      return beta;
-    }
+
   }
 
   if(legal_moves == 0) {
@@ -2398,6 +2594,7 @@ void search_position(int depth) {
   nodes = 0;
   apply_pv = 0;
   pv_score = 0;
+  stopped = 0;
 
   memset(killer_moves, 0, sizeof(killer_moves));
   memset(history_moves, 0, sizeof(history_moves));
@@ -2405,11 +2602,14 @@ void search_position(int depth) {
   memset(pv_length, 0, sizeof(pv_length));
 
   for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
+    if (stopped == 1) break;
     nodes = 0; // temporary (disable in production)
     apply_pv = 1;
     score = negamax(NEG_INF, INF, cur_depth);
 
-    printf("info score cp %d depth %d nodes %ld pv ", side_to_move^1? score : -score, cur_depth, nodes);
+    if (stopped == 1) break;
+
+    printf("info score cp %d depth %d nodes %ld pv ", score, cur_depth, nodes);
     for (int i = 0; i < pv_length[0]; i++) printf("%s ", get_move_str(pv_table[0][i]));
     printf("\n");
   }
@@ -2490,28 +2690,114 @@ void parse_position(char *command) {
   }
 }
 
+void parse_uci_makemoves(char *command) {
+  command += 10;
+  char *cur_char = command;
+
+  while (*cur_char) {
+    int move = parse_move(cur_char);
+    if (!move) { break; }
+    make_move(move, allow_all_moves);
+    while(*cur_char && *cur_char != ' ') {cur_char++;}
+    cur_char++;
+  }
+}
+
 /*
  * go
  * go moves e2e4
  * go depth 6 moves e2e4
  * go moves e2e4 movetime 300 depth 10
  * */
-void parse_go(char *command){
-  command += 3;
+void parse_go(char *command)
+{
+    // init parameters
+    int depth = -1;
 
-  int depth = -1;
-  // char *cur_depth = NULL;
-  int time_ms = -1;
+    // init argument
+    char *argument = NULL;
 
-  if(strstr(command, "depth")) {
-    depth = atoi(strstr(command, "depth") + 6);
-  } else depth = 6;
+    // infinite search
+    if ((argument = strstr(command,"infinite"))) {}
 
-  if(strstr(command, "movetime")) {
-    time_ms = atoi(strstr(command, "movetime") + 8);
-  }
+    // match UCI "binc" command
+    if ((argument = strstr(command,"binc")) && side_to_move == black)
+        // parse black time increment
+        inc = atoi(argument + 5);
 
-  search_position(depth);
+    // match UCI "winc" command
+    if ((argument = strstr(command,"winc")) && side_to_move == white)
+        // parse white time increment
+        inc = atoi(argument + 5);
+
+    // match UCI "wtime" command
+    if ((argument = strstr(command,"wtime")) && side_to_move == white)
+        // parse white time limit
+        time = atoi(argument + 6);
+
+    // match UCI "btime" command
+    if ((argument = strstr(command,"btime")) && side_to_move == black)
+        // parse black time limit
+        time = atoi(argument + 6);
+
+    // match UCI "movestogo" command
+    if ((argument = strstr(command,"movestogo")))
+        // parse number of moves to go
+        movestogo = atoi(argument + 10);
+
+    // match UCI "movetime" command
+    if ((argument = strstr(command,"movetime")))
+        // parse amount of time allowed to spend to make a move
+        movetime = atoi(argument + 9);
+
+    // match UCI "depth" command
+    if ((argument = strstr(command,"depth")))
+        // parse search depth
+        depth = atoi(argument + 6);
+
+    // if move time is not available
+    if(movetime != -1)
+    {
+        // set time equal to move time
+        time = movetime;
+
+        // set moves to go to 1
+        movestogo = 1;
+    }
+
+    // init start time
+    starttime = get_time_ms();
+
+    // init search depth
+    depth = depth;
+
+    // if time control is available
+    if(time != -1)
+    {
+        // flag we're playing with time control
+        timeset = 1;
+
+        // set up timing
+        time /= movestogo;
+
+        // "illegal" (empty) move bug fix
+        if (time > 1500) time -= 50;
+
+        // init stoptime
+        stoptime = starttime + time + inc;
+    }
+
+    // if depth is not available
+    if(depth == -1)
+        // set depth to 64 plies (takes ages to complete...)
+        depth = 64;
+
+    // print debug info
+    printf("time:%d start:%d stop:%d depth:%d timeset:%d\n",
+    time, starttime, stoptime, depth, timeset);
+
+    // search position
+    search_position(depth);
 }
 
 
@@ -2542,6 +2828,10 @@ void uci_loop() {
 
     if (strncmp(input, "position", 8) == 0) {
       parse_position(input); continue;
+    }
+
+    if (strncmp(input, "makemoves", 9) == 0) {
+      parse_uci_makemoves(input); continue;
     }
 
     if (strncmp(input, "ucinewgame", 10) == 0) {
@@ -2578,7 +2868,7 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(start_position);
+  parse_fen(cmk_position);
   uci_loop();
 
 
