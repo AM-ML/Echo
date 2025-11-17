@@ -77,6 +77,8 @@ int can_castle; // WCK WCQ BCQ BCK
 
 int en_passant = no_square;
 
+U64 hash_key; // the final hash key used to hash a position
+
 /***** Constants *****/
 const char *square_to_notation[] = {
     "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8", "a7", "b7", "c7",
@@ -85,22 +87,21 @@ const char *square_to_notation[] = {
     "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a3", "b3", "c3", "d3",
     "e3", "f3", "g3", "h3", "a2", "b2", "c2", "d2", "e2", "f2", "g2",
     "h2", "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"};
+
 int char_to_square(const char *square) {
-  if (!square || strlen(square) != 2) {
-    return no_square; // invalid input
-  }
+  if (!square) return no_square;
 
   char file = square[0];
   char rank = square[1];
 
-  // Validate rank and file
+  /* Validate that the two chars are valid file/rank digits */
   if (file < 'a' || file > 'h' || rank < '1' || rank > '8') {
-    return no_square; // Invalid file or rank
+    return no_square;
   }
 
-  int file_index = file - 'a';       // 0 for 'a'
-  int rank_index = 8 - (rank - '0'); // 0 for '8', ..., 7 for '1'
-  int idx = rank_index * 8 + file_index; // Convert to 0..63
+  int file_index = file - 'a';                 /* 0..7 */
+  int rank_index = 8 - (rank - '0');          /* '8'->0, '1'->7 */
+  int idx = rank_index * 8 + file_index;      /* 0..63 */
 
   if (idx < 0 || idx >= no_square) return no_square;
   return idx;
@@ -128,6 +129,7 @@ static inline int get_lsb_index(U64 bitboard) {
 }
 
 
+
 void reset_states_and_board() {
   memset(bitboards, 0ULL, 96);
   memset(sides_occupancies, 0ULL, 24);
@@ -143,82 +145,7 @@ void set_sides_occupancies() {
                              bitboards[bR] | bitboards[bQ] | bitboards[bK];
   sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
 }
-// order: 8/7/6/5/4/3/2/1 (top to bottom) | 12345678 (left to right) /12345678
-void parse_fen(char *fen) {
-  reset_states_and_board();
 
-  // Parse board position
-  for (int rank = 0; rank < 8; rank++) {
-    for (int file = 0; file < 8;) {
-      int square = RF_2SQ(rank, file);
-
-      if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z')) {
-        int piece = decode_ascii_pieces[*fen++];
-        set_bit(bitboards[piece], square);
-        file++;
-      } else if (*fen >= '1' && *fen <= '8') {
-        file += *fen++ - '0';
-      } else {
-        fen++;
-      }
-    }
-  }
-
-  // Skip spaces
-  while (*fen == ' ')
-    fen++;
-
-  // Parse side to move
-  side_to_move = (*fen == 'w') ? white : black;
-  fen++;
-
-  // Skip spaces
-  while (*fen == ' ')
-    fen++;
-
-  // Parse castling rights
-  can_castle = 0;
-  if (*fen != '-') {
-    while (*fen != ' ') {
-      switch (*fen++) {
-      case 'K':
-        can_castle |= WCK;
-        break;
-      case 'Q':
-        can_castle |= WCQ;
-        break;
-      case 'k':
-        can_castle |= BCK;
-        break;
-      case 'q':
-        can_castle |= BCQ;
-        break;
-      }
-    }
-  } else {
-    fen++;
-  }
-
-  // Skip spaces
-  while (*fen == ' ')
-    fen++;
-
-  // Parse en passant square
-  if (*fen == '-') {
-    en_passant = no_square;
-    fen++;
-  } else {
-    en_passant = char_to_square(fen);
-    fen += 2;
-  }
-
-  // Skip remaining FEN components (ply and move count)
-  while (*fen && *fen != ' ')
-    fen++;
-
-  // Finalize board states
-  set_sides_occupancies();
-}
 
 // print bitboard
 void print_bitboard(U64 bitboard) {
@@ -376,6 +303,8 @@ void print_board(int flag) {
     // Colored Unicode mode
     printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m",
            sides_occupancies[both]);
+    printf("\n\033[1;93mHash Key: \033[1;95m%llx\033[0;0m",
+           hash_key);
     printf("\n\033[1;93mCastling: \033[1;95m%c%c%c%c\033[0;0m",
            can_castle & WCK ? 'K' : '_',
            can_castle & WCQ ? 'Q' : '_',
@@ -912,6 +841,146 @@ U64 find_magic_number(int square, int relevant_bits_count, int flag) {
   return 0ULL;
 }
 
+
+// ---------------------------
+// ----- ZOBRIST HASHING -----
+// ---------------------------
+
+//      [piece][square]
+U64 piece_keys[12][64];
+U64 enpassant_keys[64]; // [square]
+U64 castle_keys[16]; // 1111 KQkq = 16
+U64 side_to_move_key; // white : black (0, 1)
+
+
+void init_hash_keys () {
+  state = 1804289383; // if constant, key generation is constant (which is good)
+
+  for(int piece = wP; piece < bK; piece++) { // for each piece
+    for(int square = 0; square < 64; square++) { // loop over each square
+      piece_keys[piece][square] = get_random_64();
+    }
+  }
+
+  for(int square = 0; square < 64; square++) {
+    enpassant_keys[square] = get_random_64();
+  }
+
+  for(int i = 0; i < 16; i++) {
+    castle_keys[i] = get_random_64();
+  }
+
+  side_to_move_key = get_random_64();
+}
+
+
+U64 update_hash_key() {
+  U64 fkey = 0ULL; // XORs piece position, enpassant, castling info, side_to_move
+  U64 piece_bb; // temporary piece bitboard placeholder
+
+  // XOR hashed pieces position into the final hash key
+  for(int piece = wP; piece < bK; piece++) { // loop over each piece's bitboard
+    piece_bb = bitboards[piece];
+
+    // while there is still pieces not hashed
+    while(piece_bb) {
+      int piece_square = get_lsb_index(piece_bb); // get piece position
+
+      fkey ^= piece_keys[piece][piece_square]; // hash square and add it to position
+
+      pop_bit(piece_bb, piece_square);
+    }
+  }
+
+  // if en passant square is in position
+  if (en_passant != no_square) {
+    fkey ^= enpassant_keys[en_passant]; // XOR hashed enpassant square
+  }
+
+  fkey ^= castle_keys[can_castle];
+  if (side_to_move == black) fkey ^= side_to_move_key;
+
+  return fkey;
+}
+
+// order: 8/7/6/5/4/3/2/1 (top to bottom) | 12345678 (left to right) /12345678
+void parse_fen(char *fen) {
+  reset_states_and_board();
+
+  // Parse board position
+  for (int rank = 0; rank < 8; rank++) {
+    for (int file = 0; file < 8;) {
+      int square = RF_2SQ(rank, file);
+
+      if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z')) {
+        int piece = decode_ascii_pieces[*fen++];
+        set_bit(bitboards[piece], square);
+        file++;
+      } else if (*fen >= '1' && *fen <= '8') {
+        file += *fen++ - '0';
+      } else {
+        fen++;
+      }
+    }
+  }
+
+  // Skip spaces
+  while (*fen == ' ')
+    fen++;
+
+  // Parse side to move
+  side_to_move = (*fen == 'w') ? white : black;
+  fen++;
+
+  // Skip spaces
+  while (*fen == ' ')
+    fen++;
+
+  // Parse castling rights
+  can_castle = 0;
+  if (*fen != '-') {
+    while (*fen != ' ') {
+      switch (*fen++) {
+      case 'K':
+        can_castle |= WCK;
+        break;
+      case 'Q':
+        can_castle |= WCQ;
+        break;
+      case 'k':
+        can_castle |= BCK;
+        break;
+      case 'q':
+        can_castle |= BCQ;
+        break;
+      }
+    }
+  } else {
+    fen++;
+  }
+
+  // Skip spaces
+  while (*fen == ' ')
+    fen++;
+
+  // Parse en passant square
+  if (*fen == '-') {
+    en_passant = no_square;
+    fen++;
+  } else {
+    en_passant = char_to_square(fen);
+    fen += 2;
+  }
+
+  // Skip remaining FEN components (ply and move count)
+  while (*fen && *fen != ' ')
+    fen++;
+
+  // Finalize board states
+  set_sides_occupancies();
+  hash_key = update_hash_key();
+}
+
 void init_sliding_pieces(int flag) {
   for (int square = 0; square < 64; square++) {
     int is_bishop = flag == bishop;
@@ -1114,6 +1183,7 @@ static inline int is_valid_encoded_move(int move) {
     if (src < 0 || src >= 64) return 0;
     if (dst < 0 || dst >= 64) return 0;
     if (pc  < 0 || pc  >= 12) return 0; /* piece values 0..11 */
+    if (move == 0) return 0; // hopefully fixes null move a8a8 bug
     return 1;
 }
 
@@ -1167,7 +1237,7 @@ static inline void print_move(int move) {
 }
 static inline char* get_move_str(int move) {
   char* buffer = malloc(sizeof(char) * 8);
-  snprintf(buffer, sizeof(buffer), "%s%s%c", square_to_notation[get_move_source(move)],
+  snprintf(buffer, 8, "%s%s%c", square_to_notation[get_move_source(move)],
          square_to_notation[get_move_target(move)],
          ascii_promoted_pieces[get_move_promoted_piece(move)]);
   return buffer;
@@ -1728,18 +1798,21 @@ const int castling_rights[64] = {
 };
 
 #define COPY_BOARD()                                                           \
-  U64 bitboards_copy[12], sides_occupancies_copy[3];                           \
+  U64 bitboards_copy[12], sides_occupancies_copy[3], hash_key_copy;            \
   int side_to_move_copy, en_passant_copy, can_castle_copy;                     \
   memcpy(bitboards_copy, bitboards, 96);                                       \
   memcpy(sides_occupancies_copy, sides_occupancies, 24);                       \
   side_to_move_copy = side_to_move, en_passant_copy = en_passant,              \
-  can_castle_copy = can_castle;
+  can_castle_copy = can_castle;                                                \
+  hash_key_copy = hash_key;
+
 
 #define RESTORE_BOARD()                                                        \
   memcpy(bitboards, bitboards_copy, 96);                                       \
   memcpy(sides_occupancies, sides_occupancies_copy, 24);                       \
   side_to_move = side_to_move_copy, en_passant = en_passant_copy,              \
-  can_castle = can_castle_copy;
+  can_castle = can_castle_copy;                                                \
+  hash_key = hash_key_copy
 
 enum { allow_all_moves, allow_only_captures };
 
@@ -1761,7 +1834,7 @@ static inline int make_move(int move, int move_flag) {
 
     if (source_sqr < 0 || source_sqr >= 64 ||
       target_sqr < 0 || target_sqr >= 64 ||
-      piece < 0 || piece >= 12) {
+      piece < 0 || piece >= 12 || move == 0 || source_sqr == target_sqr) {
 
       /* restore board state to be safe (we did COPY_BOARD earlier) */
       RESTORE_BOARD();
@@ -1774,6 +1847,10 @@ static inline int make_move(int move, int move_flag) {
 
     set_bit(bitboards[piece], target_sqr);
 
+    /* update piece location in the hash position */
+    hash_key ^= piece_keys[piece][source_sqr]; // remove it from source
+    hash_key ^= piece_keys[piece][target_sqr]; // add it to target
+
     if (capture_flag) {
       int start_piece = side_to_move == white ? bP : wP,
           end_piece = side_to_move == white ? bK : wK;
@@ -1781,6 +1858,9 @@ static inline int make_move(int move, int move_flag) {
       for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++) {
         if (get_bit(bitboards[bb_piece], target_sqr)) {
           pop_bit(bitboards[bb_piece], target_sqr);
+
+          // update hash: remove piece from hash position
+          hash_key ^= piece_keys[bb_piece][target_sqr];
 
           break;
         }
@@ -1791,18 +1871,29 @@ static inline int make_move(int move, int move_flag) {
       pop_bit(bitboards[(side_to_move == white) ? wP : bP], target_sqr);
 
       set_bit(bitboards[promoted_piece], target_sqr);
+      // remove hashed pawn preset earlier with the promoted piece
+      hash_key ^= piece_keys[piece][target_sqr]; // remove pawn
+      hash_key ^= piece_keys[promoted_piece][target_sqr]; // add promoted piece
     }
-    if (en_passant_flag) {
+    if (en_passant_flag) { // en passant capture
       if (side_to_move == white) {
-        pop_bit(bitboards[bP], target_sqr + 8);
+        pop_bit(bitboards[bP], target_sqr + 8); // remove captured en passant pawn
+        hash_key ^= piece_keys[bP][target_sqr + 8]; // update hash
       } else {
-        pop_bit(bitboards[wP], target_sqr - 8);
+        pop_bit(bitboards[wP], target_sqr - 8); // remove captured enpassant pawn
+        hash_key ^= piece_keys[wP][target_sqr - 8]; // update hash
       }
     }
+
+    // if captured pawn using en passant, remove the en passant hashed square
+    if (en_passant != no_square) hash_key ^= enpassant_keys[en_passant];
     en_passant = no_square;
 
     if (double_push_flag) {
       en_passant = (side_to_move == white) ? target_sqr + 8 : target_sqr - 8;
+
+      /* update hash: en passant square */
+      hash_key ^= enpassant_keys[en_passant];
     }
 
     if (castling_flag) {
@@ -1811,33 +1902,68 @@ static inline int make_move(int move, int move_flag) {
       case (g1):
         pop_bit(bitboards[wR], h1);
         set_bit(bitboards[wR], f1);
+
+        hash_key ^= piece_keys[wR][h1];
+        hash_key ^= piece_keys[wR][f1];  // update rook hash position on castling
         break;
       // WCQ
       case (c1):
         pop_bit(bitboards[wR], a1);
         set_bit(bitboards[wR], d1);
+
+
+        hash_key ^= piece_keys[wR][a1];
+        hash_key ^= piece_keys[wR][d1];  // update rook hash position on castling
         break;
       // BCK
       case (g8):
         pop_bit(bitboards[bR], h8);
         set_bit(bitboards[bR], f8);
+
+        hash_key ^= piece_keys[bR][h8];
+        hash_key ^= piece_keys[bR][f8];  // update rook hash position on castling
         break;
 
       // BCQ
       case (c8):
         pop_bit(bitboards[bR], a8);
         set_bit(bitboards[bR], d8);
+
+        hash_key ^= piece_keys[bR][a8];
+        hash_key ^= piece_keys[bR][d8];  // update rook hash position on castling
         break;
       }
     }
+
+    // update hash: remove previous castling rights
+    hash_key ^= castle_keys[can_castle];
 
     // update castling rights
     can_castle &= castling_rights[source_sqr];
     can_castle &= castling_rights[target_sqr];
 
+    // update hash: add new hashed castling rights
+    hash_key ^= castle_keys[can_castle];
+
     set_sides_occupancies();
 
     side_to_move ^= 1;
+    // if side was white, now it is black therefore we hash it with the side key
+    // if side was black, it was already hashed, now is white so ^= key to unhash it
+    hash_key ^= side_to_move_key;
+
+    // -------------------------------------- //
+    // ---- HASH KEY INCREMENTAL UPDATES ---- //
+    // -------------------------------------- //
+
+    U64 whole_hash_key = update_hash_key();
+    if (hash_key != whole_hash_key){
+      print_board(1);
+      printf("\033[1;93mMAKE MOVE\033[0;0m move: %s\n", get_move_str(move));
+      printf("\033[1;36m%llx\033[0;0m should be %llx\n\n", hash_key, whole_hash_key);
+
+    }
+
 
    int king_sq;
     if (side_to_move == white) {
@@ -1865,7 +1991,7 @@ static inline int make_move(int move, int move_flag) {
   // capture moves
   else {
     if (get_move_capture_flag(move)) {
-      make_move(move, allow_all_moves);
+      return make_move(move, allow_all_moves);
     } else {
       return 0;
     }
@@ -1936,6 +2062,13 @@ static inline void perft_driver(int depth) {
     perft_driver(depth - 1); // call perft recursively
 
     RESTORE_BOARD();
+
+    U64 whole_hash_key = update_hash_key();
+    if (hash_key != whole_hash_key){
+      printf("\033[1;93mPERFT DRIVER\033[0;0m move: %s\n", get_move_str(move));
+      printf("\033[1;36m%llx\033[0;0m should be %llx\n\n", hash_key, whole_hash_key);
+
+    }
   }
 }
 
@@ -1957,6 +2090,7 @@ void perft_test(int depth) {
 
     long prev_nodes = nodes;
 
+
     perft_driver(depth - 1);
 
     long new_nodes = nodes - prev_nodes;
@@ -1973,158 +2107,166 @@ void perft_test(int depth) {
 }
 
 const int pst_score[12][64] = {
-  // White pawn
+  // White Pawn
   {
-    90,  90,  90,  90,  90,  90,  90,  90,
-    30,  30,  30,  40,  40,  30,  30,  30,
-    20,  20,  20,  30,  30,  30,  20,  20,
-    10,  10,  10,  20,  20,  10,  10,  10,
-     5,   5,  10,  20,  20,   5,   5,   5,
-     0,   0,   0,   5,   5,   0,   0,   0,
-     0,   0,   0, -10, -10,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0
+      0,   0,   0,   0,   0,   0,   0,   0,
+     98, 134,  61,  95,  68, 126, 34, -11,
+     -6,   7,  26,  31,  65,  56, 25, -20,
+    -14,  13,   6,  21,  23,  12, 17, -23,
+    -27,  -2,  -5,  12,  17,   6, 10, -25,
+    -26,  -4,  -4, -10,   3,   3, 33, -12,
+    -35,  -1, -20, -23, -15,  24, 38, -22,
+      0,   0,   0,   0,   0,   0,  0,   0
   },
-  // White knight
+
+  // White Knight
   {
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   0,   0,  10,  10,   0,   0,  -5,
-    -5,   5,  20,  20,  20,  20,   5,  -5,
-    -5,  10,  20,  30,  30,  20,  10,  -5,
-    -5,  10,  20,  30,  30,  20,  10,  -5,
-    -5,   5,  20,  10,  10,  20,   5,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5, -10,   0,   0,   0,   0, -10,  -5
+    -167, -89, -34, -49,  61, -97, -15, -107,
+     -73, -41,  72,  36,  23,  62,   7,  -17,
+     -47,  60,  37,  65,  84, 129,  73,   44,
+      -9,  17,  19,  53,  37,  69,  18,   22,
+     -13,   4,  16,  13,  28,  19,  21,   -8,
+     -23,  -9,  12,  10,  19,  17,  25,  -16,
+     -29, -53, -12,  -3,  -1,  18, -14,  -19,
+    -105, -21, -58, -33, -17, -28, -19,  -23
   },
-  // White bishop
+
+  // White Bishop
   {
-    0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,
-    0,  20,   0,  10,  10,   0,  20,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,  10,   0,   0,   0,   0,  10,   0,
-    0,  30,   0,   0,   0,   0,  30,   0,
-    0,   0, -10,   0,   0, -10,   0,   0
+    -29,   4, -82, -37, -25, -42,   7,  -8,
+    -26,  16, -18, -13,  30,  59,  18, -47,
+    -16,  37,  43,  40,  35,  50,  37,  -2,
+     -4,   5,  19,  50,  37,  37,   7,  -2,
+     -6,  13,  13,  26,  34,  12,  10,   4,
+      0,  15,  15,  15,  14,  27,  18,  10,
+      4,  15,  16,   0,   7,  21,  33,   1,
+    -33,  -3, -14, -21, -13, -12, -39, -21
   },
-  // White rook
+
+  // White Rook
   {
-    50,  50,  50,  50,  50,  50,  50,  50,
-    50,  50,  50,  50,  50,  50,  50,  50,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,   0,  20,  20,   0,   0,   0
+     32,  42,  32,  51, 63,  9,  31,  43,
+     27,  32,  58,  62, 80, 67,  26,  44,
+     -5,  19,  26,  36, 17, 45,  61,  16,
+    -24, -11,   7,  26, 24, 35,  -8, -20,
+    -36, -26, -12,  -1,  9, -7,   6, -23,
+    -45, -25, -16, -17,  3,  0,  -5, -33,
+    -44, -16, -20,  -9, -1, 11,  -6, -71,
+    -19, -13,   1,  17, 16,  7, -37, -26
   },
-  // White queen
+
+  // White Queen
   {
-    -20, -10, -10,  -5,  -5, -10, -10, -20,
-    -10,   0,   0,   0,   0,   0,   0, -10,
-    -10,   0,   5,   5,   5,   5,   0, -10,
-     -5,   0,   5,   5,   5,   5,   0,  -5,
-      0,   0,   5,   5,   5,   5,   0,  -5,
-    -10,   5,   5,   5,   5,   5,   0, -10,
-    -10,   0,   5,   0,   0,   0,   0, -10,
-    -20, -10, -10,  -5,  -5, -10, -10, -20
+    -28,   0,  29,  12,  59,  44,  43,  45,
+    -24, -39,  -5,   1, -16,  57,  28,  54,
+    -13, -17,   7,   8,  29,  56,  47,  57,
+    -27, -27, -16, -16,  -1,  17,  -2,   1,
+     -9, -26,  -9, -10,  -2,  -4,   3,  -3,
+    -14,   2, -11,  -2,  -5,   2,  14,   5,
+    -35,  -8,  11,   2,   8,  15,  -3,   1,
+     -1, -18,  -9,  10, -15, -25, -31, -50
   },
-  // White king
+
+  // White King (Middlegame)
   {
-    0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   5,   5,   5,   5,   0,   0,
-    0,   5,   5,  10,  10,   5,   5,   0,
-    0,   5,  10,  20,  20,  10,   5,   0,
-    0,   5,  10,  20,  20,  10,   5,   0,
-    0,   0,   5,  10,  10,   5,   0,   0,
-    0,   5,   5,  -5,  -5,   0,   5,   0,
-    0,   0,   5,   0, -15,   0,  10,   0
+    -65,  23,  16, -15, -56, -34,   2,  13,
+     29,  -1, -20,  -7,  -8,  -4, -38, -29,
+     -9,  24,   2, -16, -20,   6,  22, -22,
+    -17, -20, -12, -27, -30, -25, -14, -36,
+    -49,  -1, -27, -39, -46, -44, -33, -51,
+    -14, -14, -22, -46, -44, -30, -15, -27,
+      1,   7,  -8, -64, -43, -16,   9,   8,
+    -15,  36,  12, -54,   8, -28,  24,  14
   },
-  // Black pawn (mirrored white pawn)
+
+  // Black Pawn (mirrored)
   {
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0, -10, -10,   0,   0,   0,
-     0,   0,   0,   5,   5,   0,   0,   0,
-     5,   5,  10,  20,  20,   5,   5,   5,
-    10,  10,  10,  20,  20,  10,  10,  10,
-    20,  20,  20,  30,  30,  30,  20,  20,
-    30,  30,  30,  40,  40,  30,  30,  30,
-    90,  90,  90,  90,  90,  90,  90,  90
+      0,   0,   0,   0,   0,   0,  0,   0,
+    -35,  -1, -20, -23, -15,  24, 38, -22,
+    -26,  -4,  -4, -10,   3,   3, 33, -12,
+    -27,  -2,  -5,  12,  17,   6, 10, -25,
+    -14,  13,   6,  21,  23,  12, 17, -23,
+     -6,   7,  26,  31,  65,  56, 25, -20,
+     98, 134,  61,  95,  68, 126, 34, -11,
+      0,   0,   0,   0,   0,   0,  0,   0
   },
-  // Black knight (mirrored white knight)
+
+  // Black Knight (mirrored)
   {
-    -5, -10,   0,   0,   0,   0, -10,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5,
-    -5,   5,  20,  10,  10,  20,   5,  -5,
-    -5,  10,  20,  30,  30,  20,  10,  -5,
-    -5,  10,  20,  30,  30,  20,  10,  -5,
-    -5,   5,  20,  20,  20,  20,   5,  -5,
-    -5,   0,   0,  10,  10,   0,   0,  -5,
-    -5,   0,   0,   0,   0,   0,   0,  -5
+    -105, -21, -58, -33, -17, -28, -19,  -23,
+     -29, -53, -12,  -3,  -1,  18, -14,  -19,
+     -23,  -9,  12,  10,  19,  17,  25,  -16,
+     -13,   4,  16,  13,  28,  19,  21,   -8,
+      -9,  17,  19,  53,  37,  69,  18,   22,
+     -47,  60,  37,  65,  84, 129,  73,   44,
+     -73, -41,  72,  36,  23,  62,   7,  -17,
+    -167, -89, -34, -49,  61, -97, -15, -107
   },
-  // Black bishop (mirrored white bishop)
+
+  // Black Bishop (mirrored)
   {
-    0,   0, -10,   0,   0, -10,   0,   0,
-    0,  30,   0,   0,   0,   0,  30,   0,
-    0,  10,   0,   0,   0,   0,  10,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,   0,  10,  20,  20,  10,   0,   0,
-    0,  20,   0,  10,  10,   0,  20,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0
+    -33,  -3, -14, -21, -13, -12, -39, -21,
+      4,  15,  16,   0,   7,  21,  33,   1,
+      0,  15,  15,  15,  14,  27,  18,  10,
+     -6,  13,  13,  26,  34,  12,  10,   4,
+     -4,   5,  19,  50,  37,  37,   7,  -2,
+    -16,  37,  43,  40,  35,  50,  37,  -2,
+    -26,  16, -18, -13,  30,  59,  18, -47,
+    -29,   4, -82, -37, -25, -42,   7,  -8
   },
-  // Black rook (mirrored white rook)
+
+  // Black Rook (mirrored)
   {
-     0,   0,   0,  20,  20,   0,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-     0,   0,  10,  20,  20,  10,   0,   0,
-    50,  50,  50,  50,  50,  50,  50,  50,
-    50,  50,  50,  50,  50,  50,  50,  50
+    -19, -13,   1,  17, 16,  7, -37, -26,
+    -44, -16, -20,  -9, -1, 11,  -6, -71,
+    -45, -25, -16, -17,  3,  0,  -5, -33,
+    -36, -26, -12,  -1,  9, -7,   6, -23,
+    -24, -11,   7,  26, 24, 35,  -8, -20,
+     -5,  19,  26,  36, 17, 45,  61,  16,
+     27,  32,  58,  62, 80, 67,  26,  44,
+     32,  42,  32,  51, 63,  9,  31,  43
   },
-  /* Black Queen */
+
+  // Black Queen (mirrored)
   {
-    -20, -10, -10,  -5,  -5, -10, -10, -20,
-    -10,   0,   0,   0,   0,   0,   0, -10,
-    -10,   0,   5,   0,   0,   0,   0, -10,
-    -10,   5,   5,   5,   5,   5,   0, -10,
-      0,   0,   5,   5,   5,   5,   0,  -5,
-     -5,   0,   5,   5,   5,   5,   0,  -5,
-    -10,   0,   5,   5,   5,   5,   0, -10,
-    -20, -10, -10,  -5,  -5, -10, -10, -20
+     -1, -18,  -9,  10, -15, -25, -31, -50,
+    -35,  -8,  11,   2,   8,  15,  -3,   1,
+    -14,   2, -11,  -2,  -5,   2,  14,   5,
+     -9, -26,  -9, -10,  -2,  -4,   3,  -3,
+    -27, -27, -16, -16,  -1,  17,  -2,   1,
+    -13, -17,   7,   8,  29,  56,  47,  57,
+    -24, -39,  -5,   1, -16,  57,  28,  54,
+    -28,   0,  29,  12,  59,  44,  43,  45
   },
-  // Black king (mirrored white king)
+
+  // Black King (Middlegame - mirrored)
   {
-    0,   0,  10,   0, -15,   0,   5,   0,
-    0,   5,   0,  -5,  -5,   5,   5,   0,
-    0,   0,   5,  10,  10,   5,   0,   0,
-    0,   5,  10,  20,  20,  10,   5,   0,
-    0,   5,  10,  20,  20,  10,   5,   0,
-    0,   5,   5,  10,  10,   5,   5,   0,
-    0,   0,   5,   5,   5,   5,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0
+    -15,  36,  12, -54,   8, -28,  24,  14,
+      1,   7,  -8, -64, -43, -16,   9,   8,
+    -14, -14, -22, -46, -44, -30, -15, -27,
+    -49,  -1, -27, -39, -46, -44, -33, -51,
+    -17, -20, -12, -27, -30, -25, -14, -36,
+     -9,  24,   2, -16, -20,   6,  22, -22,
+     29,  -1, -20,  -7,  -8,  -4, -38, -29,
+    -65,  23,  16, -15, -56, -34,   2,  13
   }
 };
 
-
-
-
+// Updated material values (more standard)
 int material_score[12] = {
-  230, // wP eval
-  817, // N
-  870, // B
-  1330, // R
-  2610, // Q
-  10000, // K
-  -230, // bP
-  -817, // n
-  -870, // b
-  -1330, // r
-  -2610, // q
-  -10000  // k
+  100,   // wP
+  320,   // wN
+  330,   // wB
+  500,   // wR
+  900,   // wQ
+  20000, // wK
+  -100,  // bP
+  -320,  // bN
+  -330,  // bB
+  -500,  // bR
+  -900,  // bQ
+  -20000 // bK
 };
-
 
 // Most Valuable Victim (MVV) - Least Valuable Attacker lookup table (LVA)
 // note: (might look redundant but the use of a 12x12
@@ -2353,7 +2495,7 @@ int input_waiting()
 void read_input()
 {
     // bytes to read holder
-    int bytes;
+    ssize_t bytes;
 
     // GUI/user input
     char input[256] = "", *endc;
@@ -2414,28 +2556,66 @@ static void communicate() {
 
 
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
-
   if (stopped == 1) return alpha;
 
-  // every 2047 nodes
-  if((nodes & 2047 ) == 0)
-    // "listen" to the GUI/user input
+  // Check limits every 2047 nodes
+  if ((nodes & 2047) == 0)
     communicate();
 
   nodes++;
 
-  if(qs_depth <= -10) { return eval(); }
+  // Initialize PV length for this ply
+  pv_length[ply] = ply;
 
-  int evaluation = eval();
+  // Max QS depth to prevent search explosion
+  if (qs_depth <= -10) {
+    return eval();
+  }
 
-  if (alpha >= beta) return beta;
-  if (evaluation > alpha) alpha = evaluation;
+  // Stand-pat evaluation
+  int stand_pat = eval();
 
+  // Beta cutoff (standing pat is already too good)
+  if (stand_pat >= beta)
+    return beta;
+
+  // Delta pruning - if even capturing the queen can't raise alpha, skip
+  const int BIG_DELTA = 900; // Queen value
+  if (stand_pat < alpha - BIG_DELTA)
+    return alpha;
+
+  // Update alpha with stand-pat
+  if (stand_pat > alpha)
+    alpha = stand_pat;
+
+  // Generate and sort capture moves
   Moves ml;
   generate_capture_moves(&ml);
   sort_moves(&ml);
 
   for (int i = 0; i < ml.count; i++) {
+    // Delta pruning on individual moves
+    int target_piece = wP;
+    if (!get_move_en_passant_flag(ml.moves[i])) {
+      int start = (side_to_move == white) ? bP : wP;
+      int end = (side_to_move == white) ? bK : wK;
+
+      for (int bb_piece = start; bb_piece <= end; bb_piece++) {
+        if (get_bit(bitboards[bb_piece], get_move_target(ml.moves[i]))) {
+          target_piece = bb_piece;
+          break;
+        }
+      }
+    } else {
+      target_piece = (side_to_move == white) ? bP : wP;
+    }
+
+    int capture_value = abs(material_score[target_piece]);
+
+    // If capturing this piece still can't raise alpha, skip it
+    if (stand_pat + capture_value + 200 < alpha)
+      continue;
+
     COPY_BOARD();
     ply++;
 
@@ -2445,150 +2625,257 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
     }
 
     int score = -quiescence_search(-beta, -alpha, qs_depth - 1);
+
     ply--;
     RESTORE_BOARD();
 
+    if (score >= beta)
+      return beta;
+
     if (score > alpha) {
       alpha = score;
-    }
-    if (alpha >= beta) {
-      return beta;
+
+      // Update PV in quiescence
+      pv_table[ply][ply] = ml.moves[i];
+      for (int next_ply = ply + 1; next_ply < pv_length[ply + 1]; next_ply++) {
+        pv_table[ply][next_ply] = pv_table[ply + 1][next_ply];
+      }
+      pv_length[ply] = pv_length[ply + 1];
     }
   }
 
   return alpha;
 }
 
-
-
+// Enhanced Negamax with improved LMR and extensions
 static inline int negamax(int alpha, int beta, int depth) {
   if (stopped == 1) return alpha;
 
-  // every 2047 nodes
-  if((nodes & 2047 ) == 0)
-    // "listen" to the GUI/user input
+  // Check for input every 2047 nodes
+  if ((nodes & 2047) == 0)
     communicate();
 
+  // Initialize PV length at this node
   pv_length[ply] = ply;
 
-
-  if (depth == 0) {
+  // Enter quiescence search at leaf nodes
+  if (depth <= 0) {
     return quiescence_search(alpha, beta, 0);
   }
 
-  if(ply >= MAX_PLY) return eval(); // very rare occurrance
+  // Prevent search explosion
+  if (ply >= MAX_PLY - 1)
+    return eval();
 
   nodes++;
 
-  int in_check = is_square_attacked_by(
-    (side_to_move == white? get_lsb_index(bitboards[wK]):
-    get_lsb_index(bitboards[bK])), side_to_move ^ 1);
+  // Check if current side's king is in check
+  int king_square = (side_to_move == white) ?
+                     get_lsb_index(bitboards[wK]) :
+                     get_lsb_index(bitboards[bK]);
 
-  // if (in_check) depth++; // increase depth in critical positions
+  int in_check = is_square_attacked_by(king_square, side_to_move ^ 1);
 
   int legal_moves = 0;
 
-  Moves ml[1];
+  if (depth >= 4 && !in_check && ply) {
+    COPY_BOARD();
 
+    side_to_move ^= 1; // give the move to the opposing side, making a null move.
+    en_passant = no_square; // reset en passat
+
+    // opposing side's depth is reduced_depth (=depth - 2) - 1 (default)
+    // score yielded is our evaluation (which is an assumption that the bigger the beta the bigger our alpha)
+    int score = -negamax(-beta, -beta + 1, depth - 3);
+
+    RESTORE_BOARD();
+
+    // if true means that beta has increased therefore have found a bigger alpha
+    // or is our position so great that not doing anything is still greater than alpha
+    if (score >= beta)
+      return beta; // fail-high cut-off
+  }
+
+  Moves ml[1];
   generate_moves(ml);
 
+  // Principal Variation scoring
   if (apply_pv) {
     enable_pv_scoring(ml);
   }
+
   sort_moves(ml);
 
+  int moves_searched = 0;
+  int found_pv = 0;
 
-  char found_PV = 0;
-
-  for(int i = 0; i < ml -> count; i++) {
+  for (int i = 0; i < ml->count; i++) {
     COPY_BOARD();
-
     ply++;
 
-    if(make_move(ml -> moves[i], allow_all_moves) == 0) { // if illegal move
+    if (make_move(ml->moves[i], allow_all_moves) == 0) {
       ply--;
-
       continue;
     }
 
     legal_moves++;
 
     int move_depth = depth;
+    int extension  = 0;
 
-    ///*** SEARCH EXTENSIONS ***///
-    int enemy_king_square = (side_to_move == white) ? get_lsb_index(bitboards[bK]) : get_lsb_index(bitboards[wK]);
-    int gives_check = is_square_attacked_by(enemy_king_square, side_to_move); // a tactically critical move requires more searching
+    /* Precompute any data that doesn't depend on the move */
+    const int can_extend   = (ply < MAX_PLY - 1);
+    const int enemy_king_sq =
+        (side_to_move == white)
+        ? get_lsb_index(bitboards[bK])
+        : get_lsb_index(bitboards[wK]);
 
-    if (in_check || gives_check || get_move_promoted_piece(ml -> moves[i]))
-      move_depth += 1;
+    /* Check if the move gives check */
+    const int gives_check =
+      is_square_attacked_by(enemy_king_sq, side_to_move);
 
-    int history_score = history_moves[get_move_piece(ml->moves[i])][get_move_target(ml->moves[i])];
+    /* Promotion flag */
+    const int is_promo =
+      get_move_promoted_piece(ml->moves[i]) != 0;
 
-    int eligible_for_lmr = found_PV &&                  // not first move
-      !get_move_capture_flag(ml->moves[i]) &&
-      !in_check &&
-      !gives_check &&
-      !get_move_promoted_piece(ml->moves[i]) &&
-      depth >= 3 && // depth limit
-      history_score < depth * depth * 3; // heuristic check (very aggressive)
+    /* === EXTENSION LOGIC === */
 
+    /* 1. Check extension (in-check OR giving check OR promotion) */
+    if (can_extend && (in_check | gives_check | is_promo))
+      extension = 1;
+
+      /* 2. Recapture extension */
+    else if (can_extend) {
+      const int move    = ml->moves[i];
+      const int is_cap  = get_move_capture_flag(move);
+
+      /* Only proceed to recapture checks if current move is capture */
+      if (is_cap && ply > 0) {
+
+        /* Extract previous move once */
+        const int prev = pv_table[ply - 1][ply - 1];
+
+        /* Previous move must also be a capture and same target */
+        if ( prev &&
+          get_move_capture_flag(prev) &&
+          get_move_target(prev) == get_move_target(move) )
+        {
+          extension = 1;
+        }
+      }
+    }
+
+    move_depth += extension;
     int score;
-    if (eligible_for_lmr) { // apply LMR for quiet moves exclusively
-      int reduced_depth= depth -  (i/2); // LMR, default deepening: -1, i/2: -1 / 2 moves late
+    int is_capture = get_move_capture_flag(ml->moves[i]);
+    int is_promotion = get_move_promoted_piece(ml->moves[i]);
+    int do_full_search = 0;
+    int piece = get_move_piece(ml->moves[i]);
+    int target = get_move_target(ml->moves[i]);
+    int hist_score = history_moves[piece][target];
 
-      if (reduced_depth < 2) reduced_depth = 2;
+    // High history threshold - moves with good history shouldn't be reduced
+    // Use depth squared as threshold since history scores are incremented by depth^2
+    int history_threshold = depth * depth * 4;
 
-      score = -negamax(-alpha-1, -alpha, reduced_depth -1); // LMR null-window search
+    // === LATE MOVE REDUCTION (LMR) ===
 
-      if (score > alpha && score < beta)
-        score = -negamax(-beta, -alpha, move_depth-1); // full-window search (non-LMR)
+    // Conditions for LMR:
+    // - Not the first few moves (move index >= 3)
+    // - Not a capture or promotion (quiet move)
+    // - Not in check and doesn't give check
+    // - Sufficient depth remaining (depth >= 3)
+    // - Not a killer move
+    // - Not a high-history move (moves that have been good in the past)
+
+    int can_reduce = (moves_searched >= 3 &&          // After first 3 moves
+                      depth >= 3 &&                    // Sufficient depth
+                      !is_capture &&                   // Not a capture
+                      !is_promotion &&                 // Not a promotion
+                      !in_check &&                     // Not in check
+                      !gives_check &&                  // Doesn't give check
+                      hist_score < history_threshold); // Not high-history move
+    if (can_reduce) {
+      // Calculate reduction based on depth and move number
+      int reduction = 1 + (depth / 4) + (moves_searched / 6);
+
+      if (reduction > depth - 1)
+        reduction = depth - 1;
+      if (reduction < 1)
+        reduction = 1;
+
+      int reduced_depth = move_depth - reduction - 1;
+      if (reduced_depth < 1)
+        reduced_depth = 1;
+
+      // Search with reduced depth and null window
+      score = -negamax(-alpha - 1, -alpha, reduced_depth);
+
+      // If reduced search fails high, need full depth search
+      do_full_search = (score > alpha);
     }
+    // Principal Variation Search (PVS) - null window for non-PV nodes
+    else if (found_pv) {
+      score = -negamax(-alpha - 1, -alpha, move_depth - 1);
+      do_full_search = (score > alpha && score < beta);
+    }
+    // First move - always full window
     else {
-      if (apply_pv && found_PV) {
-        score = -negamax(-alpha -1, -alpha, move_depth-1); // null-window search
-      }
-      else {
-        score = -negamax(-beta, -alpha, move_depth-1); // full-window search
-      }
+      do_full_search = 1;
     }
 
-    ply --;
+    // Do full depth, full window search if needed
+    if (do_full_search) {
+      score = -negamax(-beta, -alpha, move_depth - 1);
+    }
 
+    moves_searched++;
+    ply--;
     RESTORE_BOARD();
 
-
-    if(score >= beta) { // if best move can be defended
-      killer_moves[1][ply] = killer_moves[0][ply]; // store prev best killer move
-      killer_moves[0][ply] = ml -> moves[i]; // store best move to evaluate in another position
+    // Beta cutoff
+    if (score >= beta) {
+      // Store killer moves (non-captures only)
+      if (!is_capture && !is_promotion) {
+        killer_moves[1][ply] = killer_moves[0][ply];
+        killer_moves[0][ply] = ml->moves[i];
+      }
       return beta;
     }
 
-    if(score > alpha) {
+    // Alpha improvement (new best move found)
+    if (score > alpha) {
       alpha = score;
-      found_PV = 1;
+      found_pv = 1;
 
-      history_moves[get_move_piece(ml -> moves[i])][get_move_target(ml -> moves[i])] += depth*depth;
-
-      pv_table[ply][ply] = ml -> moves[i]; // [ply][ply] -> diagonal / triangular movement
-
-      for(int next_move_position = ply + 1; next_move_position < pv_length[ply + 1]; next_move_position++) {
-        pv_table[ply][next_move_position] = pv_table[ply+1][next_move_position];
+      // Update history heuristic (quiet moves only)
+      if (!is_capture && !is_promotion) {
+        history_moves[get_move_piece(ml->moves[i])][get_move_target(ml->moves[i])] += depth * depth;
       }
 
-      pv_length[ply] = pv_length[ply+1];
-    }
+      // Update PV table
+      pv_table[ply][ply] = ml->moves[i];
 
+      for (int next_ply = ply + 1; next_ply < pv_length[ply + 1]; next_ply++) {
+        pv_table[ply][next_ply] = pv_table[ply + 1][next_ply];
+      }
+
+      pv_length[ply] = pv_length[ply + 1];
+    }
   }
 
-  if(legal_moves == 0) {
-    if (in_check) return -59000 + ply; // return mating score (search deeper for checkmate)
-    else return 0; // stalemate / draw (0)
+  // No legal moves - checkmate or stalemate
+  if (legal_moves == 0) {
+    if (in_check)
+      return -49000 + ply; // Checkmate (prefer faster mates)
+    else
+      return 0; // Stalemate
   }
 
   return alpha;
 }
 
-
+// Enhanced search with aspiration windows
 void search_position(int depth) {
   int score = 0;
   nodes = 0;
@@ -2601,29 +2888,67 @@ void search_position(int depth) {
   memset(pv_table, 0, sizeof(pv_table));
   memset(pv_length, 0, sizeof(pv_length));
 
+  int prev_score = 0;
+
+  // Add this: save the best move from last completed iteration
+  int best_move = 0;
+
   for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
     if (stopped == 1) break;
-    nodes = 0; // temporary (disable in production)
-    apply_pv = 1;
-    score = negamax(NEG_INF, INF, cur_depth);
 
+    nodes = 0;
+    apply_pv = 1;
+
+    // Aspiration windows (after depth 4)
+    if (cur_depth >= 5) {
+      int window = 50;
+      int alpha = prev_score - window;
+      int beta = prev_score + window;
+
+      score = negamax(alpha, beta, cur_depth);
+
+      // Re-search if we fall outside the window
+      if (score <= alpha || score >= beta) {
+        score = negamax(NEG_INF, INF, cur_depth);
+      }
+    } else {
+      score = negamax(NEG_INF, INF, cur_depth);
+    }
+
+    // Check if search was stopped during this iteration
     if (stopped == 1) break;
 
+    prev_score = score;
+
+    // Save best move only after successful completion
+    if (pv_length[0] > 0) {
+      best_move = pv_table[0][0];
+    }
+
     printf("info score cp %d depth %d nodes %ld pv ", score, cur_depth, nodes);
-    for (int i = 0; i < pv_length[0]; i++) printf("%s ", get_move_str(pv_table[0][i]));
+    for (int i = 0; i < pv_length[0]; i++) {
+      printf("%s ", get_move_str(pv_table[0][i]));
+    }
     printf("\n");
   }
-  printf("bestmove "); print_move(pv_table[0][0]);
+
+  // Print the best move from last completed iteration
+  if (best_move != 0) {
+    printf("bestmove ");
+    print_move(best_move);
+  } else {
+    // Fallback if no search completed
+    printf("bestmove ");
+    print_move(pv_table[0][0]);
+  }
 }
 
 
-//*** basic uci protocol
 int parse_move(char *move_str) { // move_str: e2e4, e7e8q, etc.
   Moves ml;
   ml.count = 0;
   generate_moves(&ml);
 
-  // must at least have source + target squares
   if (strlen(move_str) < 4) return 0;
 
   int src_sqr  = (move_str[0] - 'a') + ((8 - (move_str[1] - '0')) * 8);
@@ -2633,21 +2958,24 @@ int parse_move(char *move_str) { // move_str: e2e4, e7e8q, etc.
     int move = ml.moves[i];
 
     if (get_move_source(move) == src_sqr &&
-      get_move_target(move) == dest_sqr) {
+        get_move_target(move) == dest_sqr) {
 
       int pp = get_move_promoted_piece(move);
 
-      // non-promotion move
+      /* non-promotion move */
       if (pp == 0 && (move_str[4] == '\0' || isspace((unsigned char)move_str[4]))) {
         return move;
       }
 
-      // promotion moves (accept lower/upper case)
-      char promo = (char)tolower((unsigned char)move_str[4]);
-      if (pp == wQ && promo == 'q') return move;
-      if (pp == wR && promo == 'r') return move;
-      if (pp == wN && promo == 'n') return move;
-      if (pp == wB && promo == 'b') return move;
+      /* promotion moves (accept lower/upper case), accept both white & black promo constants */
+      if (move_str[4] != '\0') {
+        char promo = (char)tolower((unsigned char)move_str[4]);
+
+        if ((pp == wQ || pp == bQ) && promo == 'q') return move;
+        if ((pp == wR || pp == bR) && promo == 'r') return move;
+        if ((pp == wN || pp == bN) && promo == 'n') return move;
+        if ((pp == wB || pp == bB) && promo == 'b') return move;
+      }
     }
   }
 
@@ -2865,11 +3193,16 @@ void init_all() {
   // init_magic_numbers();
 }
 
+
 int main(void) {
   init_all();
+  init_hash_keys();
 
-  parse_fen(cmk_position);
-  uci_loop();
+  parse_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
+  print_board(1);
+  perft_test(7);
+  printf("total nodes: %ld\n", nodes);
+  // uci_loop();
 
 
 
