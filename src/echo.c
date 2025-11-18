@@ -1953,16 +1953,16 @@ static inline int make_move(int move, int move_flag) {
     hash_key ^= side_to_move_key;
 
     // -------------------------------------- //
-    // ---- HASH KEY INCREMENTAL UPDATES ---- //
+    // ---- HASH KEY TEST ---- //
     // -------------------------------------- //
 
-    U64 whole_hash_key = update_hash_key();
-    if (hash_key != whole_hash_key){
-      print_board(1);
-      printf("\033[1;93mMAKE MOVE\033[0;0m move: %s\n", get_move_str(move));
-      printf("\033[1;36m%llx\033[0;0m should be %llx\n\n", hash_key, whole_hash_key);
-
-    }
+    // U64 whole_hash_key = update_hash_key();
+    // if (hash_key != whole_hash_key){
+    //   print_board(1);
+    //   printf("\033[1;93mMAKE MOVE\033[0;0m move: %s\n", get_move_str(move));
+    //   printf("\033[1;36m%llx\033[0;0m should be %llx\n\n", hash_key, whole_hash_key);
+    //
+    // }
 
 
    int king_sq;
@@ -2063,12 +2063,13 @@ static inline void perft_driver(int depth) {
 
     RESTORE_BOARD();
 
-    U64 whole_hash_key = update_hash_key();
-    if (hash_key != whole_hash_key){
-      printf("\033[1;93mPERFT DRIVER\033[0;0m move: %s\n", get_move_str(move));
-      printf("\033[1;36m%llx\033[0;0m should be %llx\n\n", hash_key, whole_hash_key);
 
-    }
+    // U64 whole_hash_key = update_hash_key();
+    // if (hash_key != whole_hash_key){
+    //   printf("\033[1;93mPERFT DRIVER\033[0;0m move: %s\n", get_move_str(move));
+    //   printf("\033[1;36m%llx\033[0;0m should be %llx\n\n", hash_key, whole_hash_key);
+    //
+    // }
   }
 }
 
@@ -2311,6 +2312,7 @@ static inline int eval() {
 }
 
 #define MAX_PLY 64
+#define MATE_SCORE 32000
 
 int ply;  // half-move counter
 
@@ -2321,6 +2323,69 @@ int pv_length[MAX_PLY];
 int pv_table[MAX_PLY][MAX_PLY];
 
 int apply_pv, pv_score;
+
+// ----------------------------- //
+// ---- TRANSPOSITION TABLE ---- //
+// ----------------------------- //
+
+#define TT_SIZE_MB 64
+#define TT_SIZE_BYTES (TT_SIZE_MB * 1024 * 1024)
+
+#define hashf_EXACT 0
+#define hashf_LOWERBOUND 1
+#define hashf_UPPERBOUND 2
+
+// 100,000 to ensure it goes outside the bound of alpha-beta which could be the return value aswell
+#define NO_TT_ENTRY_FOUND 100000
+
+typedef struct {
+  U64         key; // uncompressed, might compress to 16bits later to save memory
+  int8_t    depth; // 255: score and move calculated at this depth
+  int8_t     flag; // EXACT, LOWERBOUND, UPPERBOUND
+  int16_t   score; // 65535: alpha/beta/PV
+  int       move; // compress: SSSS SSTT TTTT PPPP (src/dest/promo)
+} TT_Entry; // size: 16 bytes / entry (uncompressed)
+
+size_t tt_size = TT_SIZE_BYTES / sizeof(TT_Entry); // max num entries
+int16_t age = 0; // search generation (incremented each search cycle)
+TT_Entry* TranspositionTable;
+
+void clear_tt() { memset(TranspositionTable, 0, TT_SIZE_BYTES); }
+
+void init_tt() {
+  TranspositionTable = calloc(tt_size, sizeof(TT_Entry)); // calloc = malloc + memset
+  if(!TranspositionTable) printf("ERROR! couldn't initialize transposition table.\n");
+}
+
+static inline int read_tt_entry(int alpha, int beta, int depth) {
+  size_t index = hash_key & (tt_size - 1); // index is the first 22 bits of the key;
+  TT_Entry* tt_hash_ptr = &TranspositionTable[index];
+
+  if (tt_hash_ptr -> key == hash_key) { // if position found in tt
+    if(tt_hash_ptr -> depth >= depth) {
+      // if is the pv node, return pre-computed score
+      if(tt_hash_ptr -> flag == hashf_EXACT) return tt_hash_ptr -> score;
+
+      // make sure the node that previously failed-high has a score that also fails-high now (both >= beta)
+      if(tt_hash_ptr -> flag == hashf_UPPERBOUND && tt_hash_ptr -> score >= beta) return beta; // fail-high cutoff
+
+      // make sure the node that previously failed-low has a score that also fails-low now (both <= alpha)
+      if(tt_hash_ptr -> flag == hashf_LOWERBOUND && tt_hash_ptr -> score <= alpha) return alpha; // fail-low cutoff
+    }
+  }
+
+  return NO_TT_ENTRY_FOUND;
+}
+
+void store_tt_entry(int16_t score, int8_t depth, int8_t hashf) {
+  size_t index = hash_key & (tt_size - 1);
+  TT_Entry* tt_entry = &TranspositionTable[index];
+
+  tt_entry -> key = hash_key;
+  tt_entry -> depth = depth;
+  tt_entry -> score = score;
+  tt_entry -> flag = hashf;
+}
 
 
 static inline void enable_pv_scoring(Moves* ml) {
@@ -2867,7 +2932,7 @@ static inline int negamax(int alpha, int beta, int depth) {
   // No legal moves - checkmate or stalemate
   if (legal_moves == 0) {
     if (in_check)
-      return -49000 + ply; // Checkmate (prefer faster mates)
+      return ply - MATE_SCORE; // Checkmate (prefer faster mates)
     else
       return 0; // Stalemate
   }
@@ -2916,7 +2981,6 @@ void search_position(int depth) {
     }
 
     // Check if search was stopped during this iteration
-    if (stopped == 1) break;
 
     prev_score = score;
 
@@ -2924,6 +2988,7 @@ void search_position(int depth) {
     if (pv_length[0] > 0) {
       best_move = pv_table[0][0];
     }
+    if (stopped == 1) break;
 
     printf("info score cp %d depth %d nodes %ld pv ", score, cur_depth, nodes);
     for (int i = 0; i < pv_length[0]; i++) {
@@ -3190,21 +3255,32 @@ void init_all() {
   init_sliding_pieces(bishop);
   init_sliding_pieces(rook);
   init_default_board_position();
+  init_hash_keys();
+  init_tt();
   // init_magic_numbers();
 }
 
 
 int main(void) {
   init_all();
-  init_hash_keys();
 
-  parse_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
-  print_board(1);
-  perft_test(7);
-  printf("total nodes: %ld\n", nodes);
+  parse_fen(start_position);
+  store_tt_entry(250, 8, hashf_EXACT);
+  int score = read_tt_entry(20,40,8);
+  printf("%d\n", score); // return 250
+
+
+  store_tt_entry(250, 8, hashf_UPPERBOUND);
+  score = read_tt_entry(20,40,8); // fail-high cutoff return 40
+  printf("%d\n", score);
+
+  store_tt_entry(-250, 8, hashf_LOWERBOUND);
+  score = read_tt_entry(20,40,8); // fail-low cutoff return 20
+  printf("%d\n", score);
+
   // uci_loop();
 
 
-
+  free(TranspositionTable);
   return 0;
 }
