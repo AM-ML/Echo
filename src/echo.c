@@ -140,6 +140,9 @@ static inline int get_lsb_index(U64 bitboard) {
   return bitboard ? __builtin_ctzll(bitboard) : -1;
 }
 
+#define get_rank(square) (square / 8)
+#define get_file(square) (square % 8)
+
 
 
 void reset_states_and_board() {
@@ -2441,12 +2444,25 @@ static int mvv_lva[12][12] = {
   100, 200, 300, 400, 500, 600,   100, 200, 300, 400, 500, 600,
 };
 
+// bonus for pushing enemy king closer to the edges (for checkmating)
+const int cmd_score[64] = {
+    200, 150, 100,  50,  50, 100, 150, 200,
+    150, 100,  50,  20,  20,  50, 100, 150,
+    100,  50,  20,  10,  10,  20,  50, 100,
+     50,  20,  10,   0,   0,  10,  20,  50,
+     50,  20,  10,   0,   0,  10,  20,  50,
+    100,  50,  20,  10,  10,  20,  50, 100,
+    150, 100,  50,  20,  20,  50, 100, 150,
+    200, 150, 100,  50,  50, 100, 150, 200
+};
+
+
 static inline int eval() {
   int score = 0;
   U64 cur_bb;
-
   int piece, square;
 
+  // 1. Standard Material and PST Eval
   for (int bb_piece = wP; bb_piece <= bK; bb_piece++) {
     cur_bb = bitboards[bb_piece];
     while(cur_bb) {
@@ -2455,16 +2471,51 @@ static inline int eval() {
 
       score += material_score[piece];
 
-      // If piece is white (indices 0-5), add score. If black (6-11), subtract.
-      if (piece < 6) {
+      if (piece < 6) { // White
         score += pst_score[piece][square];
-      } else {
+      } else { // Black
         score -= pst_score[piece][square];
       }
 
       pop_bit(cur_bb, square);
     }
   }
+
+  // 2. Endgame "Mop-up" Evaluation
+  // This forces the engine to mate instead of shuffling around with an advantage.
+  int white_eval = score;
+  int black_eval = -score;
+
+  // Get King positions
+  int white_king_sq = get_lsb_index(bitboards[wK]);
+  int black_king_sq = get_lsb_index(bitboards[bK]);
+
+  // Logic: If White has a significant material advantage (no Queens/Rooks on black side)
+  // We incentivize pushing the Black King to the corner and bringing White King closer.
+
+  // Simplified Check: Does Black lack major pieces?
+  if (bitboards[bQ] == 0 && bitboards[bR] == 0 && bitboards[bN] == 0 && bitboards[bB] == 0) {
+      // 1. Push enemy King to corner (CMD Score)
+      score += cmd_score[black_king_sq];
+
+      // 2. Close distance between Kings (Manhattan Distance)
+      int dist = abs(get_rank(white_king_sq) - get_rank(black_king_sq)) +
+                 abs(get_file(white_king_sq) - get_file(black_king_sq));
+
+      // Reward being closer (14 is max distance)
+      score += (14 - dist) * 10;
+  }
+
+  // Same logic for Black advantage
+  else if (bitboards[wQ] == 0 && bitboards[wR] == 0 && bitboards[wN] == 0 && bitboards[wB] == 0) {
+      score -= cmd_score[white_king_sq];
+
+      int dist = abs(get_rank(white_king_sq) - get_rank(black_king_sq)) +
+                 abs(get_file(white_king_sq) - get_file(black_king_sq));
+
+      score -= (14 - dist) * 10;
+  }
+
   if(side_to_move == white) return score;
   return -score;
 }
@@ -3040,10 +3091,36 @@ void search_position(int depth) {
   memset(pv_table, 0, sizeof(pv_table));
   memset(pv_length, 0, sizeof(pv_length));
 
-  int prev_score = 0;
+  // --- FAIL-SAFE MOVE SELECTION ---
+  // We generate moves before searching. If the search returns a draw (0) immediately
+  // or is stopped instantly, we default to the first legal move found.
+  // This prevents "bestmove (none)" or "bestmove a8a8" bugs.
+  Moves ml;
+  ml.count = 0;
+  generate_moves(&ml);
+  sort_moves(&ml); // Sort so our fail-safe is at least a decent capture/move
 
-  // Add this: save the best move from last completed iteration
   int best_move = 0;
+
+  // Find first legal move to use as default
+  for (int i = 0; i < ml.count; i++) {
+      COPY_BOARD();
+      if (make_move(ml.moves[i], allow_all_moves)) {
+          best_move = ml.moves[i];
+          RESTORE_BOARD();
+          break;
+      }
+      RESTORE_BOARD();
+  }
+
+  // If no legal moves, it's mate or stalemate, handle gracefully
+  if (best_move == 0) {
+      // No legal moves available
+      return;
+  }
+  // -------------------------------
+
+  int prev_score = 0;
 
   for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
     if (stopped == 1) break;
@@ -3067,15 +3144,16 @@ void search_position(int depth) {
       score = negamax(NEG_INF, INF, cur_depth);
     }
 
-    // Check if search was stopped during this iteration
-
     prev_score = score;
 
-    // Save best move only after successful completion
+    if (stopped == 1) break;
+
+    // Update best move if PV is available
     if (pv_length[0] > 0) {
       best_move = pv_table[0][0];
     }
-    if (stopped == 1) break;
+    // Note: If negamax returned 0 (draw) and didn't update PV (rare but possible in repetition),
+    // best_move remains our fail-safe legal move or the best move from the previous depth.
 
     if (score > -MATE_VALUE && score < -MATE_SCORE)
       printf("info score mate %d depth %d nodes %ld pv ", -(MATE_VALUE + score) / 2 - 1, cur_depth, nodes);
@@ -3092,15 +3170,8 @@ void search_position(int depth) {
     printf("\n");
   }
 
-  // Print the best move from last completed iteration
-  if (best_move != 0) {
-    printf("bestmove ");
-    print_move(best_move);
-  } else {
-    // Fallback if no search completed
-    printf("bestmove ");
-    print_move(pv_table[0][0]);
-  }
+  printf("bestmove ");
+  print_move(best_move);
 }
 
 
