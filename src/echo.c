@@ -2716,12 +2716,12 @@ static inline int negamax(int alpha, int beta, int depth) {
   // Define what a PV node is
   int pv_node = (beta - alpha) > 1;
 
-  int val = probeTT(alpha, beta, depth);
+  int val;
 
   // Only return immediately if it is NOT a PV node
   // (BBC also checks 'ply' to ensure we don't cut off at the very root,
   // though usually root is a PV node anyway)
-  if (val != NO_TT_ENTRY_FOUND && !pv_node) {
+  if (ply && !pv_node && ((val = probeTT(alpha, beta, depth)) != NO_TT_ENTRY_FOUND)) {
     return val;
   }
 
@@ -2758,14 +2758,19 @@ static inline int negamax(int alpha, int beta, int depth) {
   if (depth >= 4 && !in_check && ply) {
     COPY_BOARD();
 
+    if(en_passant != no_square) hash_key ^= enpassant_keys[en_passant];
+    en_passant = no_square; // reset en passant
+
     side_to_move ^= 1; // give the move to the opposing side, making a null move.
-    en_passant = no_square; // reset en passat
+    ply ++;
+
+    hash_key ^= side_to_move_key;
 
     // opposing side's depth is reduced_depth (=depth - 2) - 1 (default)
     // score yielded is our evaluation (which is an assumption that the bigger the beta the bigger our alpha)
     int score = -negamax(-beta, -beta + 1, depth - 3);
 
-    RESTORE_BOARD();
+    RESTORE_BOARD(); ply--;
 
     // if true means that beta has increased therefore have found a bigger alpha
     // or is our position so great that not doing anything is still greater than alpha
@@ -3237,15 +3242,18 @@ void uci_loop() {
     }
 
     if (strncmp(input, "position", 8) == 0) {
-      parse_position(input); continue;
+      parse_position(input); clear_tt();
+      continue;
     }
 
     if (strncmp(input, "makemoves", 9) == 0) {
-      parse_uci_makemoves(input); continue;
+      parse_uci_makemoves(input);
+      continue;
     }
 
     if (strncmp(input, "ucinewgame", 10) == 0) {
-      parse_position("position startpos"); continue;
+      parse_position("position startpos"); clear_tt();
+      continue;
     }
 
     if (strncmp(input, "go", 2) == 0) {
@@ -3281,7 +3289,7 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(cmk_position);
+  parse_fen(start_position);
   uci_loop();
 
 
