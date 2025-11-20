@@ -18,6 +18,7 @@
 
 #define INF 1000000
 #define NEG_INF -1000000
+#define CONTEMPT_SCORE 50
 
 #define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
 #define out(output) (printf(#output "\n"))
@@ -2483,8 +2484,6 @@ static inline int eval() {
 
   // 2. Endgame "Mop-up" Evaluation
   // This forces the engine to mate instead of shuffling around with an advantage.
-  int white_eval = score;
-  int black_eval = -score;
 
   // Get King positions
   int white_king_sq = get_lsb_index(bitboards[wK]);
@@ -2521,8 +2520,8 @@ static inline int eval() {
 }
 
 #define MAX_PLY 64
-#define MATE_VALUE 32000
-#define MATE_SCORE 31000
+#define MATE_VALUE 49000
+#define MATE_SCORE 48000
 
 int ply;  // half-move counter
 
@@ -2814,7 +2813,7 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 // Enhanced Negamax with improved LMR and extensions
 static inline int negamax(int alpha, int beta, int depth) {
 
-  if(ply && is_repetition()) return 0;
+  if(ply && is_repetition()) return -CONTEMPT_SCORE;
 
   int hashf_flag = hashf_ALPHA;
 
