@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>
 #include <unistd.h>
 #if defined(_WIN64) || defined(_WIN32)
 #include <windows.h>
@@ -79,6 +80,17 @@ int en_passant = no_square;
 
 U64 hash_key; // the final hash key used to hash a position
 
+U64 repetition_table[1000];
+int repetition_index = 0;
+
+static inline int is_repetition() {
+  for (int i = 0; i < repetition_index; i++) {
+    if (repetition_table[i] == hash_key) return 1;
+  }
+
+  return 0;
+}
+
 /***** Constants *****/
 const char *square_to_notation[] = {
     "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8", "a7", "b7", "c7",
@@ -133,6 +145,9 @@ static inline int get_lsb_index(U64 bitboard) {
 void reset_states_and_board() {
   memset(bitboards, 0ULL, 96);
   memset(sides_occupancies, 0ULL, 24);
+
+  memset(repetition_table, 0ULL, sizeof(repetition_table));
+  repetition_index = 0;
 
   can_castle = 0;
   en_passant = no_square;
@@ -2455,7 +2470,8 @@ static inline int eval() {
 }
 
 #define MAX_PLY 64
-#define MATE_SCORE 32000
+#define MATE_VALUE 32000
+#define MATE_SCORE 31000
 
 int ply;  // half-move counter
 
@@ -2526,14 +2542,34 @@ static inline int probeTT(int alpha, int beta, int depth) {
   return NO_TT_ENTRY_FOUND;
 }
 
-void storeTT(int score, int depth, int hashf) {
+int probe_move(void) {
+    TT_Entry* tt_entry = &TranspositionTable[hash_key & (tt_size - 1)];
+    if (tt_entry->key == hash_key) {
+        return tt_entry->move;
+    }
+    return 0;
+}
+
+void storeTT(int score, int depth, int hashf, int move) {
   size_t index = hash_key & (tt_size - 1);
   TT_Entry* tt_entry = &TranspositionTable[index];
+
+  // un-mate scores
+  if (score > MATE_SCORE) score += ply;
+  if (score < -MATE_SCORE) score -= ply;
+
+  if (tt_entry->key != 0) {
+      // If the existing entry is deeper and from the same position, don't overwrite it
+      if (tt_entry->depth > depth && tt_entry->key == hash_key) {
+          return;
+      }
+  }
 
   tt_entry -> key = hash_key;
   tt_entry -> depth = (int8_t) depth;
   tt_entry -> score = (int16_t) score;
   tt_entry -> flag = (int8_t) hashf;
+  tt_entry -> move = move;
 }
 
 
@@ -2549,7 +2585,10 @@ static inline void enable_pv_scoring(Moves* ml) {
   }
 }
 
-static inline int score_move(int move) {
+static inline int score_move(int move, int tt_move) {
+
+  if(move == tt_move) return 30000;
+
   if (pv_score) { // if pv line can be applied
     if (pv_table[0][ply] == move) { // check for pv match
       pv_score = 0; // found the pv, stop searching
@@ -2594,9 +2633,11 @@ static inline int sort_moves(Moves *ml) {
 
     int scores[MOVES_CAPACITY];
 
+    int tt_move = probe_move();
+
     /* score generation */
     for (int i = 0; i < ml->count; i++) {
-        scores[i] = score_move(ml->moves[i]);
+        scores[i] = score_move(ml->moves[i], tt_move);
     }
 
     /* Shell sort: gap sequence halves each iteration */
@@ -2646,9 +2687,9 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
     return beta;
 
   // Delta pruning - if even capturing the queen can't raise alpha, skip
-  const int BIG_DELTA = 900; // Queen value
-  if (stand_pat < alpha - BIG_DELTA)
-    return alpha;
+  // const int BIG_DELTA = 900; // Queen value
+  // if (stand_pat < alpha - BIG_DELTA)
+  //   return alpha;
 
   // Update alpha with stand-pat
   if (stand_pat > alpha)
@@ -2683,16 +2724,22 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
       continue;
 
     COPY_BOARD();
+
     ply++;
+    repetition_index++;
+    repetition_table[repetition_index] = hash_key;
 
     if (make_move(ml.moves[i], allow_only_captures) == 0) {
       ply--;
+      repetition_index--;
       continue;
     }
 
     int score = -quiescence_search(-beta, -alpha, qs_depth - 1);
 
     ply--;
+    repetition_index--;
+
     RESTORE_BOARD();
 
     if (score >= beta)
@@ -2716,10 +2763,13 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 // Enhanced Negamax with improved LMR and extensions
 static inline int negamax(int alpha, int beta, int depth) {
 
+  if(ply && is_repetition()) return 0;
+
   int hashf_flag = hashf_ALPHA;
 
   // Define what a PV node is
   int pv_node = (beta - alpha) > 1;
+  int tt_bestmove = 0;
 
   int val;
 
@@ -2751,17 +2801,23 @@ static inline int negamax(int alpha, int beta, int depth) {
   nodes++;
 
   // Check if current side's king is in check
-  int king_square = (side_to_move == white) ?
-                     get_lsb_index(bitboards[wK]) :
-                     get_lsb_index(bitboards[bK]);
+  int king_sq, enemy_king_sq;
+  if(side_to_move == white){
+                     king_sq = get_lsb_index(bitboards[wK]);
+                     enemy_king_sq = get_lsb_index(bitboards[bK]);
+  } else {
+    king_sq = get_lsb_index(bitboards[bK]);
+    enemy_king_sq = get_lsb_index(bitboards[wK]);
+  }
 
-  int in_check = is_square_attacked_by(king_square, side_to_move ^ 1);
+  int in_check = is_square_attacked_by(king_sq, side_to_move ^ 1);
 
   int legal_moves = 0;
 
   // NULL MOVE PRUNING
   if (depth >= 4 && !in_check && ply) {
     COPY_BOARD();
+
 
     if(en_passant != no_square) hash_key ^= enpassant_keys[en_passant];
     en_passant = no_square; // reset en passant
@@ -2800,7 +2856,11 @@ static inline int negamax(int alpha, int beta, int depth) {
     COPY_BOARD();
     ply++;
 
+    repetition_index++;
+    repetition_table[repetition_index] = hash_key;
+
     if (make_move(ml->moves[i], allow_all_moves) == 0) {
+      repetition_index--;
       ply--;
       continue;
     }
@@ -2812,14 +2872,9 @@ static inline int negamax(int alpha, int beta, int depth) {
 
     /* Precompute any data that doesn't depend on the move */
     const int can_extend   = (ply < MAX_PLY - 1);
-    const int enemy_king_sq =
-        (side_to_move == white)
-        ? get_lsb_index(bitboards[bK])
-        : get_lsb_index(bitboards[wK]);
 
-    /* Check if the move gives check */
-    const int gives_check =
-      is_square_attacked_by(enemy_king_sq, side_to_move);
+    // We check if the opponent's king is attacked by US
+    int gives_check = is_square_attacked_by(enemy_king_sq, side_to_move ^ 1);
 
     /* Promotion flag */
     const int is_promo =
@@ -2827,8 +2882,9 @@ static inline int negamax(int alpha, int beta, int depth) {
 
     /* === EXTENSION LOGIC === */
 
+    if (in_check) depth++;
     /* 1. Check extension (in-check OR giving check OR promotion) */
-    if (can_extend && (in_check | gives_check | is_promo))
+    if (can_extend && is_promo)
       extension = 1;
 
       /* 2. Recapture extension */
@@ -2875,7 +2931,7 @@ static inline int negamax(int alpha, int beta, int depth) {
     // - Not a killer move
     // - Not a high-history move (moves that have been good in the past)
 
-    int can_reduce = (moves_searched >= 3 &&          // After first 3 moves
+    int can_reduce = (moves_searched >= 4 &&          // After first 3 moves
                       depth >= 3 &&                    // Sufficient depth
                       !is_capture &&                   // Not a capture
                       !is_promotion &&                 // Not a promotion
@@ -2884,7 +2940,7 @@ static inline int negamax(int alpha, int beta, int depth) {
                       hist_score < history_threshold); // Not high-history move
     if (can_reduce) {
       // Calculate reduction based on depth and move number
-      int reduction = 1 + (depth / 4) + (moves_searched / 6);
+      int reduction = 1 + (depth / 3) + (moves_searched / 6);
 
       if (reduction > depth - 1)
         reduction = depth - 1;
@@ -2917,13 +2973,16 @@ static inline int negamax(int alpha, int beta, int depth) {
     }
 
     moves_searched++;
+
+    repetition_index--;
+
     ply--;
     RESTORE_BOARD();
 
     // Beta cutoff
     if (score >= beta) {
 
-      storeTT(beta, depth, hashf_BETA);
+      storeTT(beta, depth, hashf_BETA, ml -> moves[i]);
 
       // Store killer moves (non-captures only)
       if (!is_capture && !is_promotion) {
@@ -2936,6 +2995,7 @@ static inline int negamax(int alpha, int beta, int depth) {
     // Alpha improvement (new best move found)
     if (score > alpha) {
       alpha = score;
+      tt_bestmove = ml -> moves[i];
       found_pv = 1;
       hashf_flag = hashf_EXACT;
 
@@ -2958,12 +3018,12 @@ static inline int negamax(int alpha, int beta, int depth) {
   // No legal moves - checkmate or stalemate
   if (legal_moves == 0) {
     if (in_check)
-      return ply - MATE_SCORE; // Checkmate (prefer faster mates)
+      return ply - MATE_VALUE; // Checkmate (prefer faster mates)
     else
       return 0; // Stalemate
   }
 
-  storeTT(alpha, depth, hashf_flag);
+  storeTT(alpha, depth, hashf_flag, tt_bestmove);
   return alpha;
 }
 
@@ -3017,7 +3077,15 @@ void search_position(int depth) {
     }
     if (stopped == 1) break;
 
-    printf("info score cp %d depth %d nodes %ld pv ", score, cur_depth, nodes);
+    if (score > -MATE_VALUE && score < -MATE_SCORE)
+      printf("info score mate %d depth %d nodes %ld pv ", -(MATE_VALUE + score) / 2 - 1, cur_depth, nodes);
+
+    else if (score > MATE_SCORE && score < MATE_VALUE)
+      printf("info score mate %d depth %d nodes %ld pv ", (MATE_VALUE - score) / 2 + 1, cur_depth, nodes);
+
+    else printf("info score cp %d depth %d nodes %ld pv ", score, cur_depth, nodes);
+
+
     for (int i = 0; i < pv_length[0]; i++) {
       printf("%s ", get_move_str(pv_table[0][i]));
     }
@@ -3103,6 +3171,10 @@ void parse_position(char *command) {
     while(*cur_char) {
       int move = parse_move(cur_char);
       if (!move) { break; }
+
+      repetition_index++;
+      repetition_table[repetition_index] = hash_key;
+
       make_move(move, allow_all_moves);
       while(*cur_char && *cur_char != ' ') {cur_char++;}
       cur_char++;
