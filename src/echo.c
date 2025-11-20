@@ -2357,7 +2357,7 @@ void init_tt() {
   if(!TranspositionTable) printf("ERROR! couldn't initialize transposition table.\n");
 }
 
-static inline int read_tt_entry(int alpha, int beta, int depth) {
+static inline int probeTT(int alpha, int beta, int depth) {
   size_t index = hash_key & (tt_size - 1); // index is the first 22 bits of the key;
   TT_Entry* tt_hash_ptr = &TranspositionTable[index];
 
@@ -2438,36 +2438,37 @@ static inline int score_move(int move) {
   return 0;
 }
 
+
 static inline int sort_moves(Moves *ml) {
-  if (!ml) return 0;
-  if (ml->count <= 1) return 1; /* nothing to sort */
+    if (!ml) return 0;
+    if (ml->count <= 1) return 1;
 
-  /* safe: allocate an array on heap sized to ml->count (or use a fixed max) */
-  int *scores = malloc(sizeof(int) * (long unsigned int)ml->count);
-  if (!scores) return 0; /* OOM - leave unsorted */
+    int scores[MOVES_CAPACITY];
 
-  for (int i = 0; i < ml->count; i++) {
-    scores[i] = score_move(ml->moves[i]);
-  }
-
-  /* insertion sort using scores[] */
-  for (int i = 1; i < ml->count; i++) {
-    int key_score = scores[i];
-    int key_move = ml->moves[i];
-    int j = i - 1;
-
-    while (j >= 0 && scores[j] < key_score) {
-      scores[j + 1] = scores[j];
-      ml->moves[j + 1] = ml->moves[j];
-      j--;
+    /* score generation */
+    for (int i = 0; i < ml->count; i++) {
+        scores[i] = score_move(ml->moves[i]);
     }
 
-    scores[j + 1] = key_score;
-    ml->moves[j + 1] = key_move;
-  }
+    /* Shell sort: gap sequence halves each iteration */
+    for (int gap = ml->count / 2; gap > 0; gap /= 2) {
+        for (int i = gap; i < ml->count; i++) {
+            int s = scores[i];
+            int m = ml->moves[i];
 
-  free(scores);
-  return 1;
+            int j = i;
+            while (j >= gap && scores[j - gap] < s) {
+                scores[j] = scores[j - gap];
+                ml->moves[j] = ml->moves[j - gap];
+                j -= gap;
+            }
+
+            scores[j] = s;
+            ml->moves[j] = m;
+        }
+    }
+
+    return 1;
 }
 
 void print_moves_score(Moves* ml) {
@@ -3265,20 +3266,7 @@ int main(void) {
   init_all();
 
   parse_fen(start_position);
-  store_tt_entry(250, 8, hashf_EXACT);
-  int score = read_tt_entry(20,40,8);
-  printf("%d\n", score); // return 250
-
-
-  store_tt_entry(250, 8, hashf_UPPERBOUND);
-  score = read_tt_entry(20,40,8); // fail-high cutoff return 40
-  printf("%d\n", score);
-
-  store_tt_entry(-250, 8, hashf_LOWERBOUND);
-  score = read_tt_entry(20,40,8); // fail-low cutoff return 20
-  printf("%d\n", score);
-
-  // uci_loop();
+  uci_loop();
 
 
   free(TranspositionTable);
