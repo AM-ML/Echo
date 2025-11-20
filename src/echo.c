@@ -2107,6 +2107,144 @@ void perft_test(int depth) {
   }
 }
 
+/**********************************\
+ ==================================
+
+       Time controls variables
+
+ ==================================
+\**********************************/
+
+// exit from engine flag
+int quit = 0;
+
+int movestogo = 30;
+
+int movetime = -1;
+
+int time = -1;
+
+// UCI "inc" command's time increment holder
+int inc = 0;
+
+// UCI "starttime" command time holder
+int starttime = 0;
+
+// UCI "stoptime" command time holder
+int stoptime = 0;
+
+// variable to flag time control availability
+int timeset = 0;
+
+// variable to flag when the time is up
+int stopped = 0;
+
+
+int input_waiting()
+{
+    #ifndef WIN32
+        fd_set readfds;
+        struct timeval tv;
+        FD_ZERO (&readfds);
+        FD_SET (fileno(stdin), &readfds);
+        tv.tv_sec=0; tv.tv_usec=0;
+        select(16, &readfds, 0, 0, &tv);
+
+        return (FD_ISSET(fileno(stdin), &readfds));
+    #else
+        static int init = 0, pipe;
+        static HANDLE inh;
+        DWORD dw;
+
+        if (!init)
+        {
+            init = 1;
+            inh = GetStdHandle(STD_INPUT_HANDLE);
+            pipe = !GetConsoleMode(inh, &dw);
+            if (!pipe)
+            {
+                SetConsoleMode(inh, dw & ~(ENABLE_MOUSE_INPUT|ENABLE_WINDOW_INPUT));
+                FlushConsoleInputBuffer(inh);
+            }
+        }
+
+        if (pipe)
+        {
+           if (!PeekNamedPipe(inh, NULL, 0, NULL, &dw, NULL)) return 1;
+           return dw;
+        }
+
+        else
+        {
+           GetNumberOfConsoleInputEvents(inh, &dw);
+           return dw <= 1 ? 0 : dw;
+        }
+
+    #endif
+}
+
+// read GUI/user input
+void read_input()
+{
+    // bytes to read holder
+    ssize_t bytes;
+
+    // GUI/user input
+    char input[256] = "", *endc;
+
+    // "listen" to STDIN
+    if (input_waiting())
+    {
+        // tell engine to stop calculating
+        stopped = 1;
+
+        // loop to read bytes from STDIN
+        do
+        {
+            // read bytes from STDIN
+            bytes=read(fileno(stdin), input, 256);
+        }
+
+        // until bytes available
+        while (bytes < 0);
+
+        // searches for the first occurrence of '\n'
+        endc = strchr(input,'\n');
+
+        // if found new line set value at pointer to 0
+        if (endc) *endc=0;
+
+        // if input is available
+        if (strlen(input) > 0)
+        {
+            // match UCI "quit" command
+            if (strncmp(input, "quit", 4) == 0)
+            {
+                // tell engine to terminate exacution
+                quit = 1;
+            }
+
+            // // match UCI "stop" command
+            else if (strncmp(input, "stop", 4) == 0)    {
+                // tell engine to terminate exacution
+                quit = 1;
+            }
+        }
+    }
+}
+
+// a bridge function to interact between search and GUI input
+static void communicate() {
+	// if time is up break here
+    if(timeset == 1 && get_time_ms() > stoptime) {
+		// tell engine to stop calculating
+		stopped = 1;
+	}
+
+    // read GUI input
+	read_input();
+}
+
 const int pst_score[12][64] = {
   // White Pawn
   {
@@ -2358,33 +2496,39 @@ void init_tt() {
 }
 
 static inline int probeTT(int alpha, int beta, int depth) {
-  size_t index = hash_key & (tt_size - 1); // index is the first 22 bits of the key;
+  size_t index = hash_key & (tt_size - 1);
   TT_Entry* tt_hash_ptr = &TranspositionTable[index];
 
-  if (tt_hash_ptr -> key == hash_key) { // if position found in tt
+  if (tt_hash_ptr -> key == hash_key) {
     if(tt_hash_ptr -> depth >= depth) {
-      // if is the pv node, return pre-computed score
-      if(tt_hash_ptr -> flag == hashf_EXACT) return tt_hash_ptr -> score;
 
-      // make sure the node that previously failed-high has a score that also fails-high now (both >= beta)
-      if(tt_hash_ptr -> flag == hashf_UPPERBOUND && tt_hash_ptr -> score >= beta) return beta; // fail-high cutoff
+      // Retrieve score
+      int score = tt_hash_ptr->score;
 
-      // make sure the node that previously failed-low has a score that also fails-low now (both <= alpha)
-      if(tt_hash_ptr -> flag == hashf_LOWERBOUND && tt_hash_ptr -> score <= alpha) return alpha; // fail-low cutoff
+      // Fix Mate Score after retrieving
+      if (score > MATE_SCORE) score -= ply;
+      if (score < -MATE_SCORE) score += ply;
+
+      // Exact match
+      if(tt_hash_ptr -> flag == hashf_EXACT) return score;
+
+      // Alpha/Beta bounds checks
+      if(tt_hash_ptr -> flag == hashf_UPPERBOUND && score >= beta) return beta;
+      if(tt_hash_ptr -> flag == hashf_LOWERBOUND && score <= alpha) return alpha;
     }
   }
 
   return NO_TT_ENTRY_FOUND;
 }
 
-void store_tt_entry(int16_t score, int8_t depth, int8_t hashf) {
+void storeTT(int score, int depth, int hashf) {
   size_t index = hash_key & (tt_size - 1);
   TT_Entry* tt_entry = &TranspositionTable[index];
 
   tt_entry -> key = hash_key;
-  tt_entry -> depth = depth;
-  tt_entry -> score = score;
-  tt_entry -> flag = hashf;
+  tt_entry -> depth = (int8_t) depth;
+  tt_entry -> score = (int16_t) score;
+  tt_entry -> flag = (int8_t) hashf;
 }
 
 
@@ -2470,155 +2614,6 @@ static inline int sort_moves(Moves *ml) {
 
     return 1;
 }
-
-void print_moves_score(Moves* ml) {
-  for(int i = 0; i < ml ->count; i++) {
-    int move = ml ->moves[i];
-    printf("move: ");
-    printf("%s%s%c ", square_to_notation[get_move_source(move)],
-         square_to_notation[get_move_target(move)],
-         ascii_promoted_pieces[get_move_promoted_piece(move)]);
-    printf("score: %d\n", score_move(move));
-  }
-}
-/**********************************\
- ==================================
-
-       Time controls variables
-
- ==================================
-\**********************************/
-
-// exit from engine flag
-int quit = 0;
-
-int movestogo = 30;
-
-int movetime = -1;
-
-int time = -1;
-
-// UCI "inc" command's time increment holder
-int inc = 0;
-
-// UCI "starttime" command time holder
-int starttime = 0;
-
-// UCI "stoptime" command time holder
-int stoptime = 0;
-
-// variable to flag time control availability
-int timeset = 0;
-
-// variable to flag when the time is up
-int stopped = 0;
-
-
-int input_waiting()
-{
-    #ifndef WIN32
-        fd_set readfds;
-        struct timeval tv;
-        FD_ZERO (&readfds);
-        FD_SET (fileno(stdin), &readfds);
-        tv.tv_sec=0; tv.tv_usec=0;
-        select(16, &readfds, 0, 0, &tv);
-
-        return (FD_ISSET(fileno(stdin), &readfds));
-    #else
-        static int init = 0, pipe;
-        static HANDLE inh;
-        DWORD dw;
-
-        if (!init)
-        {
-            init = 1;
-            inh = GetStdHandle(STD_INPUT_HANDLE);
-            pipe = !GetConsoleMode(inh, &dw);
-            if (!pipe)
-            {
-                SetConsoleMode(inh, dw & ~(ENABLE_MOUSE_INPUT|ENABLE_WINDOW_INPUT));
-                FlushConsoleInputBuffer(inh);
-            }
-        }
-
-        if (pipe)
-        {
-           if (!PeekNamedPipe(inh, NULL, 0, NULL, &dw, NULL)) return 1;
-           return dw;
-        }
-
-        else
-        {
-           GetNumberOfConsoleInputEvents(inh, &dw);
-           return dw <= 1 ? 0 : dw;
-        }
-
-    #endif
-}
-
-// read GUI/user input
-void read_input()
-{
-    // bytes to read holder
-    ssize_t bytes;
-
-    // GUI/user input
-    char input[256] = "", *endc;
-
-    // "listen" to STDIN
-    if (input_waiting())
-    {
-        // tell engine to stop calculating
-        stopped = 1;
-
-        // loop to read bytes from STDIN
-        do
-        {
-            // read bytes from STDIN
-            bytes=read(fileno(stdin), input, 256);
-        }
-
-        // until bytes available
-        while (bytes < 0);
-
-        // searches for the first occurrence of '\n'
-        endc = strchr(input,'\n');
-
-        // if found new line set value at pointer to 0
-        if (endc) *endc=0;
-
-        // if input is available
-        if (strlen(input) > 0)
-        {
-            // match UCI "quit" command
-            if (strncmp(input, "quit", 4) == 0)
-            {
-                // tell engine to terminate exacution
-                quit = 1;
-            }
-
-            // // match UCI "stop" command
-            else if (strncmp(input, "stop", 4) == 0)    {
-                // tell engine to terminate exacution
-                quit = 1;
-            }
-        }
-    }
-}
-
-// a bridge function to interact between search and GUI input
-static void communicate() {
-	// if time is up break here
-    if(timeset == 1 && get_time_ms() > stoptime) {
-		// tell engine to stop calculating
-		stopped = 1;
-	}
-
-    // read GUI input
-	read_input();
-}
-
 
 
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
@@ -2715,6 +2710,21 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 
 // Enhanced Negamax with improved LMR and extensions
 static inline int negamax(int alpha, int beta, int depth) {
+
+  int hashf_flag = hashf_UPPERBOUND;
+
+  // Define what a PV node is
+  int pv_node = (beta - alpha) > 1;
+
+  int val = probeTT(alpha, beta, depth);
+
+  // Only return immediately if it is NOT a PV node
+  // (BBC also checks 'ply' to ensure we don't cut off at the very root,
+  // though usually root is a PV node anyway)
+  if (val != NO_TT_ENTRY_FOUND && !pv_node) {
+    return val;
+  }
+
   if (stopped == 1) return alpha;
 
   // Check for input every 2047 nodes
@@ -2744,6 +2754,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
   int legal_moves = 0;
 
+  // NULL MOVE PRUNING
   if (depth >= 4 && !in_check && ply) {
     COPY_BOARD();
 
@@ -2901,6 +2912,9 @@ static inline int negamax(int alpha, int beta, int depth) {
 
     // Beta cutoff
     if (score >= beta) {
+
+      storeTT(beta, depth, hashf_UPPERBOUND);
+
       // Store killer moves (non-captures only)
       if (!is_capture && !is_promotion) {
         killer_moves[1][ply] = killer_moves[0][ply];
@@ -2913,6 +2927,7 @@ static inline int negamax(int alpha, int beta, int depth) {
     if (score > alpha) {
       alpha = score;
       found_pv = 1;
+      hashf_flag = hashf_EXACT;
 
       // Update history heuristic (quiet moves only)
       if (!is_capture && !is_promotion) {
@@ -2938,6 +2953,7 @@ static inline int negamax(int alpha, int beta, int depth) {
       return 0; // Stalemate
   }
 
+  storeTT(alpha, depth, hashf_flag);
   return alpha;
 }
 
@@ -3265,7 +3281,7 @@ void init_all() {
 int main(void) {
   init_all();
 
-  parse_fen(start_position);
+  parse_fen(cmk_position);
   uci_loop();
 
 
