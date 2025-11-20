@@ -2432,19 +2432,24 @@ static inline int eval() {
 
   int piece, square;
 
-  for (int bb_piece = wP; bb_piece <= bK; bb_piece++) { // loop over each piece's bitboard
+  for (int bb_piece = wP; bb_piece <= bK; bb_piece++) {
     cur_bb = bitboards[bb_piece];
-    while(cur_bb) { // go over the bitboard's squares
+    while(cur_bb) {
       piece = bb_piece;
+      square = get_lsb_index(cur_bb);
 
-      square = get_lsb_index(cur_bb); // get the piece
-      score += material_score[piece]; // assign it to the score
-      score += pst_score[piece][square];
+      score += material_score[piece];
+
+      // If piece is white (indices 0-5), add score. If black (6-11), subtract.
+      if (piece < 6) {
+        score += pst_score[piece][square];
+      } else {
+        score -= pst_score[piece][square];
+      }
 
       pop_bit(cur_bb, square);
     }
   }
-
   if(side_to_move == white) return score;
   return -score;
 }
@@ -2470,8 +2475,8 @@ int apply_pv, pv_score;
 #define TT_SIZE_BYTES (TT_SIZE_MB * 1024 * 1024)
 
 #define hashf_EXACT 0
-#define hashf_LOWERBOUND 1
-#define hashf_UPPERBOUND 2
+#define hashf_ALPHA 1 // Upper Bound (We know score <= alpha) - Fail Low
+#define hashf_BETA  2 // Lower Bound (We know score >= beta)  - Fail High
 
 // 100,000 to ensure it goes outside the bound of alpha-beta which could be the return value aswell
 #define NO_TT_ENTRY_FOUND 100000
@@ -2513,8 +2518,8 @@ static inline int probeTT(int alpha, int beta, int depth) {
       if(tt_hash_ptr -> flag == hashf_EXACT) return score;
 
       // Alpha/Beta bounds checks
-      if(tt_hash_ptr -> flag == hashf_UPPERBOUND && score >= beta) return beta;
-      if(tt_hash_ptr -> flag == hashf_LOWERBOUND && score <= alpha) return alpha;
+      if(tt_hash_ptr -> flag == hashf_BETA && score >= beta) return beta;
+      if(tt_hash_ptr -> flag == hashf_ALPHA && score <= alpha) return alpha;
     }
   }
 
@@ -2711,7 +2716,7 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 // Enhanced Negamax with improved LMR and extensions
 static inline int negamax(int alpha, int beta, int depth) {
 
-  int hashf_flag = hashf_UPPERBOUND;
+  int hashf_flag = hashf_ALPHA;
 
   // Define what a PV node is
   int pv_node = (beta - alpha) > 1;
@@ -2918,7 +2923,7 @@ static inline int negamax(int alpha, int beta, int depth) {
     // Beta cutoff
     if (score >= beta) {
 
-      storeTT(beta, depth, hashf_UPPERBOUND);
+      storeTT(beta, depth, hashf_BETA);
 
       // Store killer moves (non-captures only)
       if (!is_capture && !is_promotion) {
