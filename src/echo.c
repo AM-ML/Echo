@@ -1256,7 +1256,7 @@ static inline void print_move(int move) {
          ascii_promoted_pieces[get_move_promoted_piece(move)]);
 }
 static inline char* get_move_str(int move) {
-  char* buffer = malloc(sizeof(char) * 8);
+  static char buffer[8];
   snprintf(buffer, 8, "%s%s%c", square_to_notation[get_move_source(move)],
          square_to_notation[get_move_target(move)],
          ascii_promoted_pieces[get_move_promoted_piece(move)]);
@@ -1852,19 +1852,25 @@ static inline int make_move(int move, int move_flag) {
     int double_push_flag = get_move_double_push_flag(move);
     int en_passant_flag = get_move_en_passant_flag(move);
 
+    // --- FIX START: Validation Check ---
+    // 1. Check bounds (you had this)
     if (source_sqr < 0 || source_sqr >= 64 ||
-      target_sqr < 0 || target_sqr >= 64 ||
-      piece < 0 || piece >= 12 || move == 0 || source_sqr == target_sqr) {
-
-      /* restore board state to be safe (we did COPY_BOARD earlier) */
+        target_sqr < 0 || target_sqr >= 64 ||
+        piece < 0 || piece >= 12 || move == 0 || source_sqr == target_sqr) {
       RESTORE_BOARD();
-
-      return 0; /* illegal / malformed move */
+      return 0;
     }
+
+    // 2. CRITICAL: Check if the piece is actually there!
+    // This stops the "Teleporting Pawn" bug caused by hash collisions.
+    if (!get_bit(bitboards[piece], source_sqr)) {
+        RESTORE_BOARD();
+        return 0;
+    }
+    // --- FIX END ---
 
     // move piece
     pop_bit(bitboards[piece], source_sqr);
-
     set_bit(bitboards[piece], target_sqr);
 
     /* update piece location in the hash position */
@@ -2567,29 +2573,24 @@ void init_tt() {
   if(!TranspositionTable) printf("ERROR! couldn't initialize transposition table.\n");
 }
 
+// Standardized Mate Score handling
 static inline int probeTT(int alpha, int beta, int depth) {
   size_t index = hash_key & (tt_size - 1);
-  TT_Entry* tt_hash_ptr = &TranspositionTable[index];
+  TT_Entry* tt_entry = &TranspositionTable[index];
 
-  if (tt_hash_ptr -> key == hash_key) {
-    if(tt_hash_ptr -> depth >= depth) {
+  if (tt_entry->key == hash_key) {
+    if (tt_entry->depth >= depth) {
+      int score = tt_entry->score;
 
-      // Retrieve score
-      int score = tt_hash_ptr->score;
-
-      // Fix Mate Score after retrieving
+      // Re-adjust mate score to be relative to current ply
       if (score > MATE_SCORE) score -= ply;
       if (score < -MATE_SCORE) score += ply;
 
-      // Exact match
-      if(tt_hash_ptr -> flag == hashf_EXACT) return score;
-
-      // Alpha/Beta bounds checks
-      if(tt_hash_ptr -> flag == hashf_BETA && score >= beta) return beta;
-      if(tt_hash_ptr -> flag == hashf_ALPHA && score <= alpha) return alpha;
+      if (tt_entry->flag == hashf_EXACT) return score;
+      if (tt_entry->flag == hashf_ALPHA && score <= alpha) return alpha;
+      if (tt_entry->flag == hashf_BETA && score >= beta) return beta;
     }
   }
-
   return NO_TT_ENTRY_FOUND;
 }
 
@@ -2605,21 +2606,18 @@ void storeTT(int score, int depth, int hashf, int move) {
   size_t index = hash_key & (tt_size - 1);
   TT_Entry* tt_entry = &TranspositionTable[index];
 
-  // Adjust mate scores to be independent of ply
+  // Store mate score relative to root (independent of current ply)
   if (score > MATE_SCORE) score += ply;
   if (score < -MATE_SCORE) score -= ply;
 
-  // Replacement scheme:
-  // 1. No entry exists
-  // 2. New search is deeper
-  // 3. Exact Hash match (updating bounds/move)
-  if (tt_entry->key == 0 || (depth >= tt_entry->depth && tt_entry->key == hash_key)) {
-
-      tt_entry->key = hash_key;
-      tt_entry->depth = (int8_t)depth;
-      tt_entry->score = (int16_t)score;
-      tt_entry->flag = (int8_t)hashf;
-      tt_entry->move = move;
+  // Always replace if new entry is deeper, OR if it's an exact match (update move/score)
+  // OR if the current entry is from an old position (collision resolution strategy)
+  if (tt_entry->key == 0 || depth >= tt_entry->depth || tt_entry->key != hash_key) {
+    tt_entry->key = hash_key;
+    tt_entry->depth = (int8_t)depth;
+    tt_entry->score = (int16_t)score;
+    tt_entry->flag = (int8_t)hashf;
+    tt_entry->move = move;
   }
 }
 
@@ -2719,10 +2717,10 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
   if ((nodes & 2047) == 0)
     communicate();
 
-  nodes++;
+  if (ply >= MAX_PLY - 1)
+    return eval();
 
-  // Initialize PV length for this ply
-  pv_length[ply] = ply;
+  nodes++;
 
   // Max QS depth to prevent search explosion
   if (qs_depth <= -10) {
@@ -2797,13 +2795,6 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 
     if (score > alpha) {
       alpha = score;
-
-      // Update PV in quiescence
-      pv_table[ply][ply] = ml.moves[i];
-      for (int next_ply = ply + 1; next_ply < pv_length[ply + 1]; next_ply++) {
-        pv_table[ply][next_ply] = pv_table[ply + 1][next_ply];
-      }
-      pv_length[ply] = pv_length[ply + 1];
     }
   }
 
@@ -3079,91 +3070,50 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 // Enhanced search with aspiration windows
 void search_position(int depth) {
+  // 1. CRITICAL: Reset ply
   ply = 0;
+
+  // Reset other stats
   nodes = 0;
   stopped = 0;
-  apply_pv = 0;
-  pv_score = 0;
-  int score = 0;
-
   memset(killer_moves, 0, sizeof(killer_moves));
   memset(history_moves, 0, sizeof(history_moves));
   memset(pv_table, 0, sizeof(pv_table));
   memset(pv_length, 0, sizeof(pv_length));
 
-  // --- FAIL-SAFE MOVE SELECTION ---
-  // We generate moves before searching. If the search returns a draw (0) immediately
-  // or is stopped instantly, we default to the first legal move found.
-  // This prevents "bestmove (none)" or "bestmove a8a8" bugs.
-  Moves ml;
-  ml.count = 0;
-  generate_moves(&ml);
-  sort_moves(&ml); // Sort so our fail-safe is at least a decent capture/move
+  // Clear TT on new game (optional but recommended for debugging)
+  // clear_tt();
 
   int best_move = 0;
 
-  // Find first legal move to use as default
-  for (int i = 0; i < ml.count; i++) {
-      COPY_BOARD();
-      if (make_move(ml.moves[i], allow_all_moves)) {
-          best_move = ml.moves[i];
-          RESTORE_BOARD();
-          break;
-      }
-      RESTORE_BOARD();
-  }
-
-  // If no legal moves, it's mate or stalemate, handle gracefully
-  if (best_move == 0) {
-      // No legal moves available
-      return;
-  }
-  // -------------------------------
-
-  int prev_score = 0;
-
+  // Iterative Deepening
   for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
     if (stopped == 1) break;
 
-    nodes = 0;
-    apply_pv = 1;
-
-    // Aspiration windows (after depth 4)
-    if (cur_depth >= 5) {
-      int window = 50;
-      int alpha = prev_score - window;
-      int beta = prev_score + window;
-
-      score = negamax(alpha, beta, cur_depth);
-
-      // Re-search if we fall outside the window
-      if (score <= alpha || score >= beta) {
-        score = negamax(NEG_INF, INF, cur_depth);
-      }
-    } else {
-      score = negamax(NEG_INF, INF, cur_depth);
-    }
-
-    prev_score = score;
+    // Aspiration Window Logic (Simplified for stability)
+    int score = negamax(NEG_INF, INF, cur_depth);
 
     if (stopped == 1) break;
 
-    // Update best move if PV is available
-    if (pv_length[0] > 0) {
-      best_move = pv_table[0][0];
+    // Update best move from PV table
+    if (pv_length[0] > 0) best_move = pv_table[0][0];
+
+    // --- FIX: Correct Mate Score Printing ---
+    printf("info depth %d score ", cur_depth);
+
+    if (score > MATE_SCORE) {
+      // Mate for us: (MATE_VALUE - score + 1) / 2
+      printf("mate %d ", (MATE_VALUE - score + 1) / 2);
     }
-    // Note: If negamax returned 0 (draw) and didn't update PV (rare but possible in repetition),
-    // best_move remains our fail-safe legal move or the best move from the previous depth.
+    else if (score < -MATE_SCORE) {
+      // Mate against us: -(score + MATE_VALUE) / 2
+      printf("mate %d ", -(score + MATE_VALUE) / 2);
+    }
+    else {
+      printf("cp %d ", score);
+    }
 
-    if (score > -MATE_VALUE && score < -MATE_SCORE)
-      printf("info score mate %d depth %d nodes %ld pv ", -(MATE_VALUE + score) / 2 - 1, cur_depth, nodes);
-
-    else if (score > MATE_SCORE && score < MATE_VALUE)
-      printf("info score mate %d depth %d nodes %ld pv ", (MATE_VALUE - score) / 2 + 1, cur_depth, nodes);
-
-    else printf("info score cp %d depth %d nodes %ld pv ", score, cur_depth, nodes);
-
-
+    printf("nodes %ld pv ", nodes);
     for (int i = 0; i < pv_length[0]; i++) {
       printf("%s ", get_move_str(pv_table[0][i]));
     }
@@ -3171,7 +3121,13 @@ void search_position(int depth) {
   }
 
   printf("bestmove ");
-  print_move(best_move);
+  if (best_move) print_move(best_move);
+  else {
+    // Fallback if search failed to return a move (rare)
+    Moves ml; ml.count = 0; generate_moves(&ml);
+    if (ml.count > 0) print_move(ml.moves[0]);
+    else print_move(0); // Resign/Mate
+  }
 }
 
 
@@ -3181,6 +3137,10 @@ int parse_move(char *move_str) { // move_str: e2e4, e7e8q, etc.
   generate_moves(&ml);
 
   if (strlen(move_str) < 4) return 0;
+
+  // safety check
+  if (move_str[0] < 'a' || move_str[0] > 'h') return 0;
+  if (move_str[2] < 'a' || move_str[2] > 'h') return 0;
 
   int src_sqr  = (move_str[0] - 'a') + ((8 - (move_str[1] - '0')) * 8);
   int dest_sqr = (move_str[2] - 'a') + ((8 - (move_str[3] - '0')) * 8);
