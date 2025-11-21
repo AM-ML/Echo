@@ -81,7 +81,8 @@ int en_passant = no_square;
 
 U64 hash_key; // the final hash key used to hash a position
 
-U64 repetition_table[1000];
+#define REP_TABLE_SIZE 4096
+U64 repetition_table[REP_TABLE_SIZE];
 int repetition_index = 0;
 
 static inline int is_repetition() {
@@ -2604,24 +2605,23 @@ void storeTT(int score, int depth, int hashf, int move) {
   size_t index = hash_key & (tt_size - 1);
   TT_Entry* tt_entry = &TranspositionTable[index];
 
-  // un-mate scores
+  // Adjust mate scores to be independent of ply
   if (score > MATE_SCORE) score += ply;
   if (score < -MATE_SCORE) score -= ply;
 
-  if (tt_entry->key != 0) {
-      // If the existing entry is deeper and from the same position, don't overwrite it
-      if (tt_entry->depth > depth && tt_entry->key == hash_key) {
-          return;
-      }
+  // Replacement scheme:
+  // 1. No entry exists
+  // 2. New search is deeper
+  // 3. Exact Hash match (updating bounds/move)
+  if (tt_entry->key == 0 || (depth >= tt_entry->depth && tt_entry->key == hash_key)) {
+
+      tt_entry->key = hash_key;
+      tt_entry->depth = (int8_t)depth;
+      tt_entry->score = (int16_t)score;
+      tt_entry->flag = (int8_t)hashf;
+      tt_entry->move = move;
   }
-
-  tt_entry -> key = hash_key;
-  tt_entry -> depth = (int8_t) depth;
-  tt_entry -> score = (int16_t) score;
-  tt_entry -> flag = (int8_t) hashf;
-  tt_entry -> move = move;
 }
-
 
 static inline void enable_pv_scoring(Moves* ml) {
   apply_pv = 0; // reset pv detection flag
@@ -2990,7 +2990,7 @@ static inline int negamax(int alpha, int beta, int depth) {
                       hist_score < history_threshold); // Not high-history move
     if (can_reduce) {
       // Calculate reduction based on depth and move number
-      int reduction = 1 + (depth / 3) + (moves_searched / 6);
+      int reduction = 1 + (depth / 3) + (moves_searched / 10);
 
       if (reduction > depth - 1)
         reduction = depth - 1;
@@ -3079,11 +3079,12 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 // Enhanced search with aspiration windows
 void search_position(int depth) {
-  int score = 0;
+  ply = 0;
   nodes = 0;
+  stopped = 0;
   apply_pv = 0;
   pv_score = 0;
-  stopped = 0;
+  int score = 0;
 
   memset(killer_moves, 0, sizeof(killer_moves));
   memset(history_moves, 0, sizeof(history_moves));
@@ -3242,8 +3243,10 @@ void parse_position(char *command) {
       int move = parse_move(cur_char);
       if (!move) { break; }
 
-      repetition_index++;
-      repetition_table[repetition_index] = hash_key;
+      if (repetition_index < REP_TABLE_SIZE - 1) {
+        repetition_index++;
+        repetition_table[repetition_index] = hash_key;
+      }
 
       make_move(move, allow_all_moves);
       while(*cur_char && *cur_char != ' ') {cur_char++;}
