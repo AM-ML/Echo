@@ -18,7 +18,7 @@
 
 #define INF 1000000
 #define NEG_INF -1000000
-#define CONTEMPT_SCORE 50
+#define CONTEMPT_SCORE 100
 
 #define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
 #define out(output) (printf(#output "\n"))
@@ -1297,23 +1297,23 @@ static inline void print_move_list(Moves *move_list) {
 static inline void generate_moves(Moves *moves_list) {
   moves_list->count = 0;
   int src_sqr, dest_sqr;
-  U64 position, attacks; // current iteration's piece bitboard & its attacks map
+  U64 position, attacks;
 
   int base = side_to_move == white? wP : bP;
   for (int i = 0; i < 6; i++) {
     int piece = base + i;
     position = bitboards[piece];
 
-    // generating pawn moves & castling move system
     if (side_to_move == white) {
       if (piece == wP) {
         while (position) {
           src_sqr = get_lsb_index(position);
-          dest_sqr = src_sqr - 8; // move up by 1 row
+          dest_sqr = src_sqr - 8;
 
-          // quiet pawn moves
-          if (dest_sqr >= a8 && !get_bit(sides_occupancies[both], dest_sqr)) {
-            // Promotion moves
+          // FIX: Check dest_sqr is within bounds (< a8 means >= 0)
+          if (!(dest_sqr < a8) && !get_bit(sides_occupancies[both], dest_sqr)) {
+
+            // FIX: Promotion happens on rank 7 (squares a7-h7 have indices 8-15)
             if (src_sqr >= a7 && src_sqr <= h7) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, wQ, 0, 0, 0, 0));
@@ -1326,7 +1326,8 @@ static inline void generate_moves(Moves *moves_list) {
             } else {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, 0, 0, 0, 0, 0));
-              // Double pawn push
+
+              // FIX: Double push from rank 2 (squares a2-h2 have indices 48-55)
               if (src_sqr >= a2 && src_sqr <= h2 &&
                   !get_bit(sides_occupancies[both], dest_sqr - 8)) {
                 add_move(moves_list,
@@ -1338,8 +1339,12 @@ static inline void generate_moves(Moves *moves_list) {
           attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
-            if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-            // pawn capture promotion move
+            // FIX: Proper bounds checking
+            if (dest_sqr < 0 || dest_sqr >= no_square) {
+              pop_bit(attacks, dest_sqr);
+              continue;
+            }
+
             if (src_sqr >= a7 && src_sqr <= h7) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, wQ, 1, 0, 0, 0));
@@ -1350,7 +1355,7 @@ static inline void generate_moves(Moves *moves_list) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, wN, 1, 0, 0, 0));
             }
-            // pawn capture move
+
             else {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, 0, 1, 0, 0, 0));
@@ -1362,9 +1367,8 @@ static inline void generate_moves(Moves *moves_list) {
             U64 can_en_passant =
                 pawn_attacks[white][src_sqr] & (1ULL << en_passant);
 
-            // get_bit() for ensurance
             if (can_en_passant && get_bit(bitboards[bP], en_passant + 8)) {
-              // en passant capture
+
               add_move(moves_list,
                        encode_move(src_sqr, en_passant, wP, 0, 1, 0, 1, 0));
             }
@@ -1374,9 +1378,9 @@ static inline void generate_moves(Moves *moves_list) {
       }
 
       if (piece == wK) {
-        // kingside castling
+
         if (can_castle &
-            WCK) { // can_castle (1111) & WCK (0001) = true | ___0 & 1 = false
+            WCK) {
           if (!get_bit(sides_occupancies[both], f1) &&
               !get_bit(sides_occupancies[both], g1)) {
             if (!is_square_attacked_by(e1, black) &&
@@ -1387,7 +1391,6 @@ static inline void generate_moves(Moves *moves_list) {
           }
         }
 
-        // queenside castling
         if (can_castle & WCQ) {
           if (!get_bit(sides_occupancies[both], d1) &&
               !get_bit(sides_occupancies[both], c1) &&
@@ -1404,10 +1407,12 @@ static inline void generate_moves(Moves *moves_list) {
       if (piece == bP) {
         while (position) {
           src_sqr = get_lsb_index(position);
-          dest_sqr = src_sqr + 8; // move up by 1 row
-          // quiet pawn moves
-          if (dest_sqr <= h1 && !get_bit(sides_occupancies[both], dest_sqr)) {
-            // Promotion moves
+          dest_sqr = src_sqr + 8;
+
+          // FIX: Check dest_sqr is within bounds (<= h1 means < 64)
+          if (!(dest_sqr > h1) && !get_bit(sides_occupancies[both], dest_sqr)) {
+
+            // FIX: Promotion happens on rank 2 (squares a2-h2 have indices 48-55)
             if (src_sqr >= a2 && src_sqr <= h2) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, bP, bQ, 0, 0, 0, 0));
@@ -1420,7 +1425,8 @@ static inline void generate_moves(Moves *moves_list) {
             } else {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, bP, 0, 0, 0, 0, 0));
-              // Double pawn push
+
+              // FIX: Double push from rank 7 (squares a7-h7 have indices 8-15)
               if (src_sqr >= a7 && src_sqr <= h7 &&
                   !get_bit(sides_occupancies[both], dest_sqr + 8)) {
                 add_move(moves_list,
@@ -1431,8 +1437,12 @@ static inline void generate_moves(Moves *moves_list) {
           attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
-            if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-            // pawn capture promotion move
+            // FIX: Proper bounds checking
+            if (dest_sqr < 0 || dest_sqr >= no_square) {
+              pop_bit(attacks, dest_sqr);
+              continue;
+            }
+
             if (src_sqr >= a2 && src_sqr <= h2) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, bP, bQ, 1, 0, 0, 0));
@@ -1443,7 +1453,7 @@ static inline void generate_moves(Moves *moves_list) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, bP, bN, 1, 0, 0, 0));
             }
-            // pawn capture move
+
             else {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, bP, 0, 1, 0, 0, 0));
@@ -1453,7 +1463,7 @@ static inline void generate_moves(Moves *moves_list) {
           if (en_passant != no_square) {
             U64 can_en_passant =
                 pawn_attacks[black][src_sqr] & (1ULL << en_passant);
-            // get_bit() for ensurance
+
             if (can_en_passant && get_bit(bitboards[wP], en_passant - 8)) {
               add_move(moves_list,
                        encode_move(src_sqr, en_passant, bP, 0, 1, 0, 1, 0));
@@ -1463,9 +1473,9 @@ static inline void generate_moves(Moves *moves_list) {
         }
       }
       if (piece == bK) {
-        // kingside castling
+
         if (can_castle &
-            BCK) { // can_castle (1111) & BCK (0001) = true | ___0 & 1 = false
+            BCK) {
           if (!get_bit(sides_occupancies[both], f8) &&
               !get_bit(sides_occupancies[both], g8)) {
             if (!is_square_attacked_by(e8, white) &&
@@ -1475,7 +1485,7 @@ static inline void generate_moves(Moves *moves_list) {
             }
           }
         }
-        // queenside castling
+
         if (can_castle & BCQ) {
           if (!get_bit(sides_occupancies[both], d8) &&
               !get_bit(sides_occupancies[both], c8) &&
@@ -1489,15 +1499,19 @@ static inline void generate_moves(Moves *moves_list) {
         }
       }
     }
-    // knight move gen
+
     if ((side_to_move == white) ? piece == wN : piece == bN) {
       while (position) {
         src_sqr = get_lsb_index(position);
         attacks = knight_attacks[src_sqr] & ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
-          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-          // quiet move
+          // FIX: Proper bounds checking
+          if (dest_sqr < 0 || dest_sqr >= no_square) {
+            pop_bit(attacks, dest_sqr);
+            continue;
+          }
+
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
             add_move(moves_list,
@@ -1511,7 +1525,7 @@ static inline void generate_moves(Moves *moves_list) {
         pop_bit(position, src_sqr);
       }
     }
-    // bishop move gen
+
     if ((side_to_move == white) ? piece == wB : piece == bB) {
       while (position) {
         src_sqr = get_lsb_index(position);
@@ -1519,8 +1533,12 @@ static inline void generate_moves(Moves *moves_list) {
                   ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
-          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-          // quiet move
+          // FIX: Proper bounds checking
+          if (dest_sqr < 0 || dest_sqr >= no_square) {
+            pop_bit(attacks, dest_sqr);
+            continue;
+          }
+
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
             add_move(moves_list,
@@ -1534,7 +1552,7 @@ static inline void generate_moves(Moves *moves_list) {
         pop_bit(position, src_sqr);
       }
     }
-    // rook move gen
+
     if ((side_to_move == white) ? piece == wR : piece == bR) {
       while (position) {
         src_sqr = get_lsb_index(position);
@@ -1542,8 +1560,12 @@ static inline void generate_moves(Moves *moves_list) {
                   ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
-          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-          // quiet move
+          // FIX: Proper bounds checking
+          if (dest_sqr < 0 || dest_sqr >= no_square) {
+            pop_bit(attacks, dest_sqr);
+            continue;
+          }
+
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
             add_move(moves_list,
@@ -1557,7 +1579,7 @@ static inline void generate_moves(Moves *moves_list) {
         pop_bit(position, src_sqr);
       }
     }
-    // queen move gen
+
     if ((side_to_move == white) ? piece == wQ : piece == bQ) {
       while (position) {
         src_sqr = get_lsb_index(position);
@@ -1565,8 +1587,12 @@ static inline void generate_moves(Moves *moves_list) {
                   ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
-          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-          // quiet move
+          // FIX: Proper bounds checking
+          if (dest_sqr < 0 || dest_sqr >= no_square) {
+            pop_bit(attacks, dest_sqr);
+            continue;
+          }
+
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
             add_move(moves_list,
@@ -1580,15 +1606,19 @@ static inline void generate_moves(Moves *moves_list) {
         pop_bit(position, src_sqr);
       }
     }
-    // king move gen
+
     if ((side_to_move == white) ? piece == wK : piece == bK) {
       while (position) {
         src_sqr = get_lsb_index(position);
         attacks = king_attacks[src_sqr] & ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
-          if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-          // quiet move
+          // FIX: Proper bounds checking
+          if (dest_sqr < 0 || dest_sqr >= no_square) {
+            pop_bit(attacks, dest_sqr);
+            continue;
+          }
+
           if (!get_bit(sides_occupancies[side_to_move == white ? black : white],
                        dest_sqr)) {
             add_move(moves_list,
@@ -2516,14 +2546,14 @@ static inline int eval() {
   return -score;
 }
 
-#define MAX_PLY 64
+#define MAX_PLY 128
 #define MATE_VALUE 49000
 #define MATE_SCORE 48000
 
 int ply;  // half-move counter
 
 int killer_moves[2][MAX_PLY]; // [side][ply]
-int history_moves[12][MAX_PLY]; // [piece][square]
+int history_moves[12][64]; // [piece][square]
 
 int pv_length[MAX_PLY];
 int pv_table[MAX_PLY][MAX_PLY];
@@ -2607,7 +2637,9 @@ void storeTT(int score, int depth, int hashf, int move) {
     tt_entry->depth = (int8_t)depth;
     tt_entry->score = (int16_t)score;
     tt_entry->flag = (int8_t)hashf;
-    tt_entry->move = move;
+
+    // This prevents overwriting a valuable hash move with '0' (null) during a Fail-Low.
+    if (move != 0) tt_entry->move = move;
   }
 }
 
@@ -2694,6 +2726,11 @@ static inline void sort_moves(Moves *ml) {
 
 
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
+
+  pv_length[ply] = ply;
+
+  if(ply && is_repetition()) return -CONTEMPT_SCORE;
+
   if (stopped == 1) return alpha;
 
   // Check limits every 2047 nodes
@@ -2875,16 +2912,19 @@ static inline int negamax(int alpha, int beta, int depth) {
 
   int moves_searched = 0;
   int found_pv = 0;
+  if (in_check) depth++;
 
   for (int i = 0; i < ml->count; i++) {
     COPY_BOARD();
     ply++;
 
-    repetition_index++;
-    repetition_table[repetition_index] = hash_key;
+    if (repetition_index < REP_TABLE_SIZE - 1) {
+        repetition_index++;
+        repetition_table[repetition_index] = hash_key;
+    }
 
     if (make_move(ml->moves[i], allow_all_moves) == 0) {
-      repetition_index--;
+      if(repetition_index > 0) repetition_index--;
       ply--;
       continue;
     }
@@ -2906,7 +2946,6 @@ static inline int negamax(int alpha, int beta, int depth) {
 
     /* === EXTENSION LOGIC === */
 
-    if (in_check) depth++;
     /* 1. Check extension (in-check OR giving check OR promotion) */
     if (can_extend && is_promo)
       extension = 1;
@@ -2998,7 +3037,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
     moves_searched++;
 
-    repetition_index--;
+    if(repetition_index > 0) repetition_index--;
 
     ply--;
     RESTORE_BOARD();
