@@ -1078,40 +1078,29 @@ static inline U64 get_queen_attacks(int square, U64 blockers) {
 }
 
 static inline int is_square_attacked_by(int square, int side) {
+  // Option: Remove 'both' support if you don't explicitly use it in search to save time.
+  // If you strictly need it, keep the recursive check, but usually search uses specific sides.
   if (side == both)
-    return is_square_attacked_by(square, white) +
-           is_square_attacked_by(square, black);
-  int opposing_side = (side == white) ? black : white;
+      return is_square_attacked_by(square, white) || is_square_attacked_by(square, black);
 
-  // Pawn attack
-  if (pawn_attacks[opposing_side][square] &
-      bitboards[(opposing_side == black) ? wP : bP])
-    return 1;
+  // Pawn attacks (Using the lookup table directly)
+  // We check if an enemy pawn is on the attacking square relative to 'square'
+  if (pawn_attacks[side ^ 1][square] & bitboards[side == white ? wP : bP]) return 1;
 
-  // Knight attack
-  U64 knight_mask = knight_attacks[square];
-  if (knight_mask & bitboards[(opposing_side == black) ? wN : bN])
-    return 1;
+  // Knight attacks
+  if (knight_attacks[square] & bitboards[side == white ? wN : bN]) return 1;
 
-  // Rook attack
-  U64 rook_mask = get_rook_attacks(square, sides_occupancies[both]);
-  if (rook_mask & bitboards[(opposing_side == black) ? wR : bR])
-    return 1;
+  // King attacks
+  if (king_attacks[square] & bitboards[side == white ? wK : bK]) return 1;
 
-  // Bishop attack
-  U64 bishop_mask = get_bishop_attacks(square, sides_occupancies[both]);
-  if (bishop_mask & bitboards[(opposing_side == black) ? wB : bB])
-    return 1;
+  // Bishop/Queen attacks (Linear sliding)
+  // We combine Bishop + Queen bitboards to check once
+  U64 bq = bitboards[side == white ? wB : bB] | bitboards[side == white ? wQ : bQ];
+  if (bq && (get_bishop_attacks(square, sides_occupancies[both]) & bq)) return 1;
 
-  // Queen attack
-  U64 queen_mask = get_queen_attacks(square, sides_occupancies[both]);
-  if (queen_mask & bitboards[(opposing_side == black) ? wQ : bQ])
-    return 1;
-
-  // King attack
-  U64 king_mask = king_attacks[square];
-  if (king_mask & bitboards[(opposing_side == black) ? wK : bK])
-    return 1;
+  // Rook/Queen attacks (Linear sliding)
+  U64 rq = bitboards[side == white ? wR : bR] | bitboards[side == white ? wQ : bQ];
+  if (rq && (get_rook_attacks(square, sides_occupancies[both]) & rq)) return 1;
 
   return 0;
 }
@@ -2468,22 +2457,23 @@ const int cmd_score[64] = {
 static inline int eval() {
   int score = 0;
   U64 cur_bb;
-  int piece, square;
+  int square;
 
-  // 1. Standard Material and PST Eval
-  for (int bb_piece = wP; bb_piece <= bK; bb_piece++) {
-    cur_bb = bitboards[bb_piece];
+  // Unrolling the loop manually for White and Black parts helps the CPU pipeline
+  // or simply iterating 0-11. The key is removing the "if (piece < 6)" check.
+
+  for (int piece = wP; piece <= bK; piece++) {
+    cur_bb = bitboards[piece];
     while(cur_bb) {
-      piece = bb_piece;
       square = get_lsb_index(cur_bb);
 
+      // OPTIMIZATION: Assumes material_score[bP] is -100, etc.
       score += material_score[piece];
 
-      if (piece < 6) { // White
-        score += pst_score[piece][square];
-      } else { // Black
-        score -= pst_score[piece][square];
-      }
+      // OPTIMIZATION: Handle PST.
+      // If piece is white (0-5), add. If black (6-11), subtract.
+      if (piece <= wK) score += pst_score[piece][square];
+      else             score -= pst_score[piece][square];
 
       pop_bit(cur_bb, square);
     }
@@ -2675,38 +2665,31 @@ static inline int score_move(int move, int tt_move) {
 }
 
 
-static inline int sort_moves(Moves *ml) {
-    if (!ml) return 0;
-    if (ml->count <= 1) return 1;
+static inline void sort_moves(Moves *ml) {
+    if (!ml || ml->count <= 1) return;
 
     int scores[MOVES_CAPACITY];
-
     int tt_move = probe_move();
 
-    /* score generation */
+    // Score all moves once
     for (int i = 0; i < ml->count; i++) {
         scores[i] = score_move(ml->moves[i], tt_move);
     }
 
-    /* Shell sort: gap sequence halves each iteration */
-    for (int gap = ml->count / 2; gap > 0; gap /= 2) {
-        for (int i = gap; i < ml->count; i++) {
-            int s = scores[i];
-            int m = ml->moves[i];
+    // Insertion Sort (Faster for small N)
+    for (int i = 1; i < ml->count; i++) {
+        int key_score = scores[i];
+        int key_move = ml->moves[i];
+        int j = i - 1;
 
-            int j = i;
-            while (j >= gap && scores[j - gap] < s) {
-                scores[j] = scores[j - gap];
-                ml->moves[j] = ml->moves[j - gap];
-                j -= gap;
-            }
-
-            scores[j] = s;
-            ml->moves[j] = m;
+        while (j >= 0 && scores[j] < key_score) {
+            scores[j + 1] = scores[j];
+            ml->moves[j + 1] = ml->moves[j];
+            j--;
         }
+        scores[j + 1] = key_score;
+        ml->moves[j + 1] = key_move;
     }
-
-    return 1;
 }
 
 
