@@ -87,16 +87,13 @@ int repetition_index = 0;
 // position repetition detection
 static inline int is_repetition()
 {
-  int count = 0;
     // loop over repetition indicies range
     for (int index = 0; index < repetition_index; index++)
         // if we found the hash key same with a current
         if (repetition_table[index] == hash_key)
-            // we found a repetition
-            count ++;
+          return 1;
 
-    // if no repetition found
-    return (count >= 2)? 1 : 0;
+  return 0;
 }
 
 /***** Constants *****/
