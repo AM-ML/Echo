@@ -18,7 +18,6 @@
 
 #define INF 1000000
 #define NEG_INF -1000000
-#define CONTEMPT_SCORE 100
 
 #define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
 #define out(output) (printf(#output "\n"))
@@ -81,16 +80,21 @@ int en_passant = no_square;
 
 U64 hash_key; // the final hash key used to hash a position
 
-#define REP_TABLE_SIZE 4096
+#define REP_TABLE_SIZE 2048
 U64 repetition_table[REP_TABLE_SIZE];
 int repetition_index = 0;
 
 static inline int is_repetition() {
+  int count = 0;
   for (int i = 0; i < repetition_index; i++) {
-    if (repetition_table[i] == hash_key) return 1;
+    if (repetition_table[i] == hash_key) {
+      count++;
+    }
   }
 
-  return 0;
+  // If count == 1: Position appeared once before (Total 2 times) -> Not a draw yet
+  // If count == 2: Position appeared twice before (Total 3 times) -> Draw
+  return count >= 2;
 }
 
 /***** Constants *****/
@@ -2729,8 +2733,6 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 
   pv_length[ply] = ply;
 
-  if(ply && is_repetition()) return -CONTEMPT_SCORE;
-
   if (stopped == 1) return alpha;
 
   // Check limits every 2047 nodes
@@ -2822,88 +2824,88 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 }
 
 // Enhanced Negamax with improved LMR and extensions
+// Enhanced Negamax with improved LMR and extensions
 static inline int negamax(int alpha, int beta, int depth) {
 
-  if(ply && is_repetition()) return -CONTEMPT_SCORE;
+  // 1. Check for Repetition / 50-move rule
+  if(ply && is_repetition()) return 0;
 
+  // 2. Probe Transposition Table
   int hashf_flag = hashf_ALPHA;
-
-  // Define what a PV node is
   int pv_node = (beta - alpha) > 1;
   int tt_bestmove = 0;
-
   int val;
 
-  // Only return immediately if it is NOT a PV node
-  // (BBC also checks 'ply' to ensure we don't cut off at the very root,
-  // though usually root is a PV node anyway)
   if (ply && !pv_node && ((val = probeTT(alpha, beta, depth)) != NO_TT_ENTRY_FOUND)) {
     return val;
   }
 
+  // 3. Check for GUI input
   if (stopped == 1) return alpha;
+  if ((nodes & 2047) == 0) communicate();
 
-  // Check for input every 2047 nodes
-  if ((nodes & 2047) == 0)
-    communicate();
-
-  // Initialize PV length at this node
+  // 4. Update Node Count & PV
   pv_length[ply] = ply;
-
-  // Enter quiescence search at leaf nodes
-  if (depth <= 0) {
-    return quiescence_search(alpha, beta, 0);
-  }
-
-  // Prevent search explosion
-  if (ply >= MAX_PLY - 1)
-    return eval();
-
   nodes++;
 
-  // Check if current side's king is in check
+  // 5. MAX PLY Guard
+  if (ply >= MAX_PLY - 1) return eval();
+
+  // =============================================================
+  // CRITICAL FIX START: Calculate In-Check and Extend BEFORE Q-Search
+  // =============================================================
+
+  // Determine if we are in check
   int king_sq, enemy_king_sq;
-  if(side_to_move == white){
-                     king_sq = get_lsb_index(bitboards[wK]);
-                     enemy_king_sq = get_lsb_index(bitboards[bK]);
+  if (side_to_move == white) {
+      king_sq = get_lsb_index(bitboards[wK]);
+      enemy_king_sq = get_lsb_index(bitboards[bK]);
   } else {
-    king_sq = get_lsb_index(bitboards[bK]);
-    enemy_king_sq = get_lsb_index(bitboards[wK]);
+      king_sq = get_lsb_index(bitboards[bK]);
+      enemy_king_sq = get_lsb_index(bitboards[wK]);
   }
 
   int in_check = is_square_attacked_by(king_sq, side_to_move ^ 1);
 
+  // CHECK EXTENSION: If in check, extend depth to ensure we find an evasion
+  if (in_check) depth++;
+
+  // NOW we check if we hit the horizon.
+  // Because we incremented depth above if in_check, we will NOT exit here
+  // if we are in check at depth 0. We will search 1 ply deeper.
+  if (depth <= 0) {
+    return quiescence_search(alpha, beta, 0);
+  }
+
+  // =============================================================
+  // CRITICAL FIX END
+  // =============================================================
+
   int legal_moves = 0;
 
   // NULL MOVE PRUNING
+  // Note: !in_check guard is already here, which is correct.
   if (depth >= 4 && !in_check && ply) {
     COPY_BOARD();
 
-
     if(en_passant != no_square) hash_key ^= enpassant_keys[en_passant];
-    en_passant = no_square; // reset en passant
+    en_passant = no_square;
 
-    side_to_move ^= 1; // give the move to the opposing side, making a null move.
+    side_to_move ^= 1;
     ply ++;
-
     hash_key ^= side_to_move_key;
 
-    // opposing side's depth is reduced_depth (=depth - 2) - 1 (default)
-    // score yielded is our evaluation (which is an assumption that the bigger the beta the bigger our alpha)
     int score = -negamax(-beta, -beta + 1, depth - 3);
 
     RESTORE_BOARD(); ply--;
 
-    // if true means that beta has increased therefore have found a bigger alpha
-    // or is our position so great that not doing anything is still greater than alpha
     if (score >= beta)
-      return beta; // fail-high cut-off
+      return beta;
   }
 
   Moves ml[1];
   generate_moves(ml);
 
-  // Principal Variation scoring
   if (apply_pv) {
     enable_pv_scoring(ml);
   }
@@ -2912,7 +2914,8 @@ static inline int negamax(int alpha, int beta, int depth) {
 
   int moves_searched = 0;
   int found_pv = 0;
-  if (in_check) depth++;
+
+  // REMOVED: if (in_check) depth++;  <-- We already did this above!
 
   for (int i = 0; i < ml->count; i++) {
     COPY_BOARD();
@@ -3428,3 +3431,4 @@ int main(void) {
   free(TranspositionTable);
   return 0;
 }
+
