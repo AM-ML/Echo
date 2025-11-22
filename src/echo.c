@@ -84,17 +84,19 @@ U64 hash_key; // the final hash key used to hash a position
 U64 repetition_table[REP_TABLE_SIZE];
 int repetition_index = 0;
 
-static inline int is_repetition() {
+// position repetition detection
+static inline int is_repetition()
+{
   int count = 0;
-  for (int i = 0; i < repetition_index; i++) {
-    if (repetition_table[i] == hash_key) {
-      count++;
-    }
-  }
+    // loop over repetition indicies range
+    for (int index = 0; index < repetition_index; index++)
+        // if we found the hash key same with a current
+        if (repetition_table[index] == hash_key)
+            // we found a repetition
+            count ++;
 
-  // If count == 1: Position appeared once before (Total 2 times) -> Not a draw yet
-  // If count == 2: Position appeared twice before (Total 3 times) -> Draw
-  return count >= 2;
+    // if no repetition found
+    return (count >= 2)? 1 : 0;
 }
 
 /***** Constants *****/
@@ -880,7 +882,7 @@ U64 side_to_move_key; // white : black (0, 1)
 void init_hash_keys () {
   state = 1804289383; // if constant, key generation is constant (which is good)
 
-  for(int piece = wP; piece < bK; piece++) { // for each piece
+  for(int piece = wP; piece <= bK; piece++) { // for each piece
     for(int square = 0; square < 64; square++) { // loop over each square
       piece_keys[piece][square] = get_random_64();
     }
@@ -903,7 +905,7 @@ U64 update_hash_key() {
   U64 piece_bb; // temporary piece bitboard placeholder
 
   // XOR hashed pieces position into the final hash key
-  for(int piece = wP; piece < bK; piece++) { // loop over each piece's bitboard
+  for(int piece = wP; piece <= bK; piece++) { // loop over each piece's bitboard
     piece_bb = bitboards[piece];
 
     // while there is still pieces not hashed
@@ -2731,39 +2733,30 @@ static inline void sort_moves(Moves *ml) {
 
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 
-  pv_length[ply] = ply;
-
-  if (stopped == 1) return alpha;
-
   // Check limits every 2047 nodes
   if ((nodes & 2047) == 0)
     communicate();
 
-  if (ply >= MAX_PLY - 1)
-    return eval();
-
   nodes++;
+
+  int eval_score = eval();
+
+  if (ply >= MAX_PLY - 1)
+    return eval_score;
+
 
   // Max QS depth to prevent search explosion
   if (qs_depth <= -10) {
-    return eval();
+    return eval_score;
   }
 
-  // Stand-pat evaluation
-  int stand_pat = eval();
-
-  // Beta cutoff (standing pat is already too good)
-  if (stand_pat >= beta)
+  // Beta cutoff
+  if (eval_score >= beta)
     return beta;
 
-  // Delta pruning - if even capturing the queen can't raise alpha, skip
-  // const int BIG_DELTA = 900; // Queen value
-  // if (stand_pat < alpha - BIG_DELTA)
-  //   return alpha;
-
-  // Update alpha with stand-pat
-  if (stand_pat > alpha)
-    alpha = stand_pat;
+  // Update alpha
+  if (eval_score > alpha)
+    alpha = eval_score;
 
   // Generate and sort capture moves
   Moves ml;
@@ -2790,7 +2783,7 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
     int capture_value = abs(material_score[target_piece]);
 
     // If capturing this piece still can't raise alpha, skip it
-    if (stand_pat + capture_value + 200 < alpha)
+    if (eval_score + capture_value + 200 < alpha)
       continue;
 
     COPY_BOARD();
@@ -2812,6 +2805,8 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
 
     RESTORE_BOARD();
 
+    if (stopped) return 0;
+
     if (score >= beta)
       return beta;
 
@@ -2823,7 +2818,6 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
   return alpha;
 }
 
-// Enhanced Negamax with improved LMR and extensions
 // Enhanced Negamax with improved LMR and extensions
 static inline int negamax(int alpha, int beta, int depth) {
 
@@ -2841,15 +2835,21 @@ static inline int negamax(int alpha, int beta, int depth) {
   }
 
   // 3. Check for GUI input
-  if (stopped == 1) return alpha;
   if ((nodes & 2047) == 0) communicate();
+  if (stopped == 1) return alpha;
 
-  // 4. Update Node Count & PV
   pv_length[ply] = ply;
+
+  // NOW we check if we hit the horizon.
+  if (depth <= 0) {
+    return quiescence_search(alpha, beta, 0);
+  }
+
+  if (ply >= MAX_PLY - 1) return eval();
+
   nodes++;
 
   // 5. MAX PLY Guard
-  if (ply >= MAX_PLY - 1) return eval();
 
   // =============================================================
   // CRITICAL FIX START: Calculate In-Check and Extend BEFORE Q-Search
@@ -2870,34 +2870,27 @@ static inline int negamax(int alpha, int beta, int depth) {
   // CHECK EXTENSION: If in check, extend depth to ensure we find an evasion
   if (in_check) depth++;
 
-  // NOW we check if we hit the horizon.
-  // Because we incremented depth above if in_check, we will NOT exit here
-  // if we are in check at depth 0. We will search 1 ply deeper.
-  if (depth <= 0) {
-    return quiescence_search(alpha, beta, 0);
-  }
-
-  // =============================================================
-  // CRITICAL FIX END
-  // =============================================================
-
-  int legal_moves = 0;
 
   // NULL MOVE PRUNING
-  // Note: !in_check guard is already here, which is correct.
   if (depth >= 4 && !in_check && ply) {
     COPY_BOARD();
+    ply ++;
+
+    repetition_index++;
+    repetition_table[repetition_index] = hash_key;
 
     if(en_passant != no_square) hash_key ^= enpassant_keys[en_passant];
     en_passant = no_square;
 
     side_to_move ^= 1;
-    ply ++;
     hash_key ^= side_to_move_key;
 
     int score = -negamax(-beta, -beta + 1, depth - 3);
 
-    RESTORE_BOARD(); ply--;
+    ply--; repetition_index--;
+    RESTORE_BOARD();
+
+    if (stopped) return 0;
 
     if (score >= beta)
       return beta;
@@ -2915,20 +2908,17 @@ static inline int negamax(int alpha, int beta, int depth) {
   int moves_searched = 0;
   int found_pv = 0;
 
-  // REMOVED: if (in_check) depth++;  <-- We already did this above!
+  int legal_moves = 0;
 
   for (int i = 0; i < ml->count; i++) {
     COPY_BOARD();
     ply++;
 
-    if (repetition_index < REP_TABLE_SIZE - 1) {
-        repetition_index++;
-        repetition_table[repetition_index] = hash_key;
-    }
+    repetition_index++;
+    repetition_table[repetition_index] = hash_key;
 
     if (make_move(ml->moves[i], allow_all_moves) == 0) {
-      if(repetition_index > 0) repetition_index--;
-      ply--;
+      ply--; repetition_index--;
       continue;
     }
 
@@ -2944,22 +2934,14 @@ static inline int negamax(int alpha, int beta, int depth) {
     int gives_check = is_square_attacked_by(enemy_king_sq, side_to_move ^ 1);
 
     /* Promotion flag */
-    const int is_promo =
-      get_move_promoted_piece(ml->moves[i]) != 0;
+    const int is_promotion = get_move_promoted_piece(ml->moves[i]) != 0;
+    const int is_capture = get_move_capture_flag(ml->moves[i]);
 
-    /* === EXTENSION LOGIC === */
+    /* === SEARCH EXTENSION === */
 
-    /* 1. Check extension (in-check OR giving check OR promotion) */
-    if (can_extend && is_promo)
-      extension = 1;
-
-      /* 2. Recapture extension */
+    if (can_extend && is_promotion) extension = 1;
     else if (can_extend) {
-      const int move    = ml->moves[i];
-      const int is_cap  = get_move_capture_flag(move);
-
-      /* Only proceed to recapture checks if current move is capture */
-      if (is_cap && ply > 0) {
+      if (is_capture && ply > 0) {
 
         /* Extract previous move once */
         const int prev = pv_table[ply - 1][ply - 1];
@@ -2967,7 +2949,7 @@ static inline int negamax(int alpha, int beta, int depth) {
         /* Previous move must also be a capture and same target */
         if ( prev &&
           get_move_capture_flag(prev) &&
-          get_move_target(prev) == get_move_target(move) )
+          get_move_target(prev) == get_move_target(ml -> moves[i]) )
         {
           extension = 1;
         }
@@ -2976,8 +2958,6 @@ static inline int negamax(int alpha, int beta, int depth) {
 
     move_depth += extension;
     int score;
-    int is_capture = get_move_capture_flag(ml->moves[i]);
-    int is_promotion = get_move_promoted_piece(ml->moves[i]);
     int do_full_search = 0;
     int piece = get_move_piece(ml->moves[i]);
     int target = get_move_target(ml->moves[i]);
@@ -3039,11 +3019,10 @@ static inline int negamax(int alpha, int beta, int depth) {
     }
 
     moves_searched++;
-
-    if(repetition_index > 0) repetition_index--;
-
-    ply--;
+    ply--; repetition_index--;
     RESTORE_BOARD();
+
+    if (stopped) return 0;
 
     // Beta cutoff
     if (score >= beta) {
@@ -3228,10 +3207,8 @@ void parse_position(char *command) {
       int move = parse_move(cur_char);
       if (!move) { break; }
 
-      if (repetition_index < REP_TABLE_SIZE - 1) {
-        repetition_index++;
-        repetition_table[repetition_index] = hash_key;
-      }
+      repetition_index++;
+      repetition_table[repetition_index] = hash_key;
 
       make_move(move, allow_all_moves);
       while(*cur_char && *cur_char != ' ') {cur_char++;}
