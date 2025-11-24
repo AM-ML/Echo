@@ -98,12 +98,15 @@ static inline int is_repetition()
 
 /***** Constants *****/
 const char *square_to_notation[] = {
-    "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8", "a7", "b7", "c7",
-    "d7", "e7", "f7", "g7", "h7", "a6", "b6", "c6", "d6", "e6", "f6",
-    "g6", "h6", "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5", "a4",
-    "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a3", "b3", "c3", "d3",
-    "e3", "f3", "g3", "h3", "a2", "b2", "c2", "d2", "e2", "f2", "g2",
-    "h2", "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"};
+    "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
+    "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
+    "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6",
+    "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5",
+    "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4",
+    "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
+    "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
+    "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"
+};
 
 int char_to_square(const char *square) {
   if (!square) return no_square;
@@ -132,6 +135,68 @@ const U64 not_B_file = 18302063728033398269ULL;
 const U64 not_G_file = 13816973012072644543ULL;
 const U64 not_rank_1 = 72057594037927935ULL;
 const U64 not_rank_8 = 18446744073709551360ULL;
+const U64 A_file = 0x0101010101010101ULL; // 01 --> 0000 0001 -> (1) = A8, A7, A6, A5...
+const U64 H_file = 0x8080808080808080ULL;
+
+const U64 rank_1 = 0xFF00000000000000ULL;
+const U64 rank_8 = 0x00000000000000FFULL;
+
+#
+/* ----------------------------------------- */
+/* --- rank - file - masks stuff section --- */
+/* ----------------------------------------- */
+
+#define get_file(square) ((square) % 8) // s = 8r + f --> 8r % 8 = 0, since file < 8, remainder = file
+#define get_rank(square) ((square) / 8) // sqr / 8 = rank.file, remainder of that is cutoff in an integer
+#define file_mask(square) (A_file << (get_file(square)))
+#define rank_mask(square) (rank_1 >> 8 * (7 - (get_rank(square))))
+
+U64 pawns_file_mask[64]; // square lookup table for pawn file mask
+U64 pawns_rank_mask[64]; // square lookup table for pawn rank mask
+U64 isolated_pawns_mask[64];
+U64 passed_pawns_mask[2][64];
+
+/*  0 0 1 0 1 0 0 0
+    0 0 1 0 1 0 0 0
+    0 0 1 0 1 0 0 0
+    0 0 1 0 1 0 0 0
+    0 0 1 0 1 0 0 0
+    0 0 1 0 1 0 0 0
+    0 0 1 _ 1 0 0 0
+    0 0 1 0 1 0 0 0 */
+
+static inline U64 isolated_pawn_mask(int square) {
+  U64 fmask = file_mask(square);
+
+  if (fmask == H_file) return fmask >> 1;
+  if (fmask == A_file) return fmask << 1;
+
+  return fmask << 1 | fmask >> 1;
+}
+
+static inline U64 passed_pawn_mask(int side, int square) {
+  U64 fmask = file_mask(square) | isolated_pawn_mask(square);
+
+  // since rank is inversed, 8 - rank will get it back to normal
+  // each >> 8 will shift up by 1, so >> rank * 8 will shift up to the rank
+  int WhiteVerticalShifter = (8 - get_rank(square)) * 8;
+  int BlackVerticalShifter = (get_rank(square) + 1) * 8;
+  return (side == white)? fmask >> WhiteVerticalShifter : fmask << BlackVerticalShifter;
+}
+
+
+void init_pawns_eval_masks() {
+  for (int square = 0; square < 64; square++) {
+    pawns_file_mask[square] = file_mask(square);
+    pawns_rank_mask[square] = rank_mask(square);
+
+    passed_pawns_mask[white][square] = passed_pawn_mask(white, square);
+    passed_pawns_mask[black][square] = passed_pawn_mask(black, square);
+
+    isolated_pawns_mask[square] = isolated_pawn_mask(square);
+  }
+}
+
 
 // set/get/pop macros
 #define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
@@ -144,12 +209,6 @@ const U64 not_rank_8 = 18446744073709551360ULL;
 static inline int get_lsb_index(U64 bitboard) {
   return bitboard ? __builtin_ctzll(bitboard) : -1;
 }
-
-#define get_rank(square) (square / 8)
-#define get_file(square) (square % 8)
-
-
-
 void reset_states_and_board() {
   memset(bitboards, 0ULL, 96);
   memset(sides_occupancies, 0ULL, 24);
@@ -3391,6 +3450,7 @@ void init_all() {
   init_default_board_position();
   init_hash_keys();
   init_tt();
+  init_pawns_eval_masks();
   // init_magic_numbers();
 }
 
@@ -3399,7 +3459,27 @@ int main(void) {
   init_all();
 
   parse_fen(start_position);
-  uci_loop();
+
+  print_bitboard_piece(a2, isolated_pawn_mask(a2));
+  print_bitboard_piece(a2, isolated_pawns_mask[a2]);
+
+  print_bitboard_piece(e2, isolated_pawn_mask(e2));
+  print_bitboard_piece(e2, isolated_pawns_mask[e2]);
+
+  print_bitboard_piece(h2, isolated_pawn_mask(h2));
+  print_bitboard_piece(h2, isolated_pawns_mask[h2]);
+
+  print_bitboard_piece(a2, passed_pawn_mask(white, a2));
+  print_bitboard_piece(a2, passed_pawns_mask[white][a2]);
+
+  print_bitboard_piece(e2, passed_pawn_mask(white, e2));
+  print_bitboard_piece(e2, passed_pawns_mask[white][e2]);
+
+  print_bitboard_piece(e7, passed_pawn_mask(black, e7));
+  print_bitboard_piece(e7, passed_pawns_mask[black][e7]);
+
+  print_bitboard_piece(h2, passed_pawn_mask(white, h2));
+  print_bitboard_piece(h2, passed_pawns_mask[white][h2]);
 
 
   free(TranspositionTable);
