@@ -141,7 +141,16 @@ const U64 H_file = 0x8080808080808080ULL;
 const U64 rank_1 = 0xFF00000000000000ULL;
 const U64 rank_8 = 0x00000000000000FFULL;
 
-#
+
+// set/get/pop macros
+#define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
+#define set_bit(bitboard, square) ((bitboard) |= 1ULL << (square))
+#define pop_bit(bitboard, square)                                              \
+  (get_bit((bitboard), (square)) ? ((bitboard) -= 1ULL << (square)) : 0)
+#define count_bits(bitboard) (__builtin_popcountll(bitboard))
+#define get_lsb(bitboard) ((bitboard) & -(bitboard))
+
+
 /* ----------------------------------------- */
 /* --- rank - file - masks stuff section --- */
 /* ----------------------------------------- */
@@ -149,22 +158,33 @@ const U64 rank_8 = 0x00000000000000FFULL;
 #define get_file(square) ((square) % 8) // s = 8r + f --> 8r % 8 = 0, since file < 8, remainder = file
 #define get_rank(square) ((square) / 8) // sqr / 8 = rank.file, remainder of that is cutoff in an integer
 #define file_mask(square) (A_file << (get_file(square)))
-#define rank_mask(square) (rank_1 >> 8 * (7 - (get_rank(square))))
+#define rank_mask(square) (rank_1 >> 8 * (7 - get_rank[square]))
+
+
+// use a lookup table since division operations are expensive.
+const int get_rank[64] = {
+  7, 7, 7, 7, 7, 7, 7, 7,
+  6, 6, 6, 6, 6, 6, 6, 6,
+  5, 5, 5, 5, 5, 5, 5, 5,
+  4, 4, 4, 4, 4, 4, 4, 4,
+  3, 3, 3, 3, 3, 3, 3, 3,
+  2, 2, 2, 2, 2, 2, 2, 2,
+  1, 1, 1, 1, 1, 1, 1, 1,
+  0, 0, 0, 0, 0, 0, 0, 0
+};
 
 U64 pawns_file_mask[64]; // square lookup table for pawn file mask
 U64 pawns_rank_mask[64]; // square lookup table for pawn rank mask
 U64 isolated_pawns_mask[64];
 U64 passed_pawns_mask[2][64];
 
-/*  0 0 1 0 1 0 0 0
-    0 0 1 0 1 0 0 0
-    0 0 1 0 1 0 0 0
-    0 0 1 0 1 0 0 0
-    0 0 1 0 1 0 0 0
-    0 0 1 0 1 0 0 0
-    0 0 1 _ 1 0 0 0
-    0 0 1 0 1 0 0 0 */
+const int double_pawn_penalty = -15; // will apply twice
+const int isolated_pawn_penalty = -15;
 
+// the closer you are to promotion, the better
+const int passed_pawn_bonus[8] = { 0, 10, 15, 25, 40, 65, 100, 200 };
+
+// 0 0 1 _ 1 0 0 0
 static inline U64 isolated_pawn_mask(int square) {
   U64 fmask = file_mask(square);
 
@@ -179,32 +199,44 @@ static inline U64 passed_pawn_mask(int side, int square) {
 
   // since rank is inversed, 8 - rank will get it back to normal
   // each >> 8 will shift up by 1, so >> rank * 8 will shift up to the rank
-  int WhiteVerticalShifter = (8 - get_rank(square)) * 8;
-  int BlackVerticalShifter = (get_rank(square) + 1) * 8;
+  int WhiteVerticalShifter = (get_rank[square]) * 8;
+  int BlackVerticalShifter = (8 - get_rank[square]) * 8;
   return (side == white)? fmask >> WhiteVerticalShifter : fmask << BlackVerticalShifter;
 }
 
 
 void init_pawns_eval_masks() {
-  for (int square = 0; square < 64; square++) {
-    pawns_file_mask[square] = file_mask(square);
-    pawns_rank_mask[square] = rank_mask(square);
+    for (int square = 0; square < 64; square++) {
+        pawns_file_mask[square] = file_mask(square);
+        pawns_rank_mask[square] = rank_mask(square);
+        isolated_pawns_mask[square] = isolated_pawn_mask(square);
 
-    passed_pawns_mask[white][square] = passed_pawn_mask(white, square);
-    passed_pawns_mask[black][square] = passed_pawn_mask(black, square);
+        // Reset passed pawn masks
+        passed_pawns_mask[white][square] = 0ULL;
+        passed_pawns_mask[black][square] = 0ULL;
 
-    isolated_pawns_mask[square] = isolated_pawn_mask(square);
-  }
+        int tr = get_rank[square];
+        int tf = get_file(square);
+
+        for (int r = 0; r < 8; r++) {
+            for (int f = 0; f < 8; f++) {
+                int sq = RF_2SQ(r, f);
+
+                if (abs(tf - f) <= 1) {
+                   if (r < tr) {
+                        set_bit(passed_pawns_mask[white][square], sq);
+                    }
+
+                    if (r > tr) {
+                        set_bit(passed_pawns_mask[black][square], sq);
+                    }
+                }
+            }
+        }
+    }
 }
 
 
-// set/get/pop macros
-#define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
-#define set_bit(bitboard, square) ((bitboard) |= 1ULL << (square))
-#define pop_bit(bitboard, square)                                              \
-  (get_bit((bitboard), (square)) ? ((bitboard) -= 1ULL << (square)) : 0)
-#define count_bits(bitboard) (__builtin_popcountll(bitboard))
-#define get_lsb(bitboard) ((bitboard) & -(bitboard))
 
 static inline int get_lsb_index(U64 bitboard) {
   return bitboard ? __builtin_ctzll(bitboard) : -1;
@@ -2535,14 +2567,14 @@ static int mvv_lva[12][12] = {
 
 // bonus for pushing enemy king closer to the edges (for checkmating)
 const int cmd_score[64] = {
-    200, 150, 100,  50,  50, 100, 150, 200,
-    150, 100,  50,  20,  20,  50, 100, 150,
-    100,  50,  20,  10,  10,  20,  50, 100,
-     50,  20,  10,   0,   0,  10,  20,  50,
-     50,  20,  10,   0,   0,  10,  20,  50,
-    100,  50,  20,  10,  10,  20,  50, 100,
-    150, 100,  50,  20,  20,  50, 100, 150,
-    200, 150, 100,  50,  50, 100, 150, 200
+    80, 60, 40,  20,  20, 40, 60, 80,
+    60, 40, 20,   8,   8, 20, 40, 60,
+    40, 20,  8,   4,   4,  8, 20, 40,
+    20, 20,  4,   0,   0,  4,  8, 20,
+    20, 20,  4,   0,   0,  4,  8, 20,
+    40, 20,  8,   4,   4,  8, 20, 40,
+    60, 40, 20,   8,   8,  5, 40 ,60,
+    80, 60, 40,  20,  20, 40, 60, 80
 };
 
 
@@ -2552,18 +2584,14 @@ static inline int eval() {
   int square;
 
   // Unrolling the loop manually for White and Black parts helps the CPU pipeline
-  // or simply iterating 0-11. The key is removing the "if (piece < 6)" check.
-
   for (int piece = wP; piece <= bK; piece++) {
     cur_bb = bitboards[piece];
     while(cur_bb) {
       square = get_lsb_index(cur_bb);
 
-      // OPTIMIZATION: Assumes material_score[bP] is -100, etc.
-      score += material_score[piece];
+      score += material_score[piece]; // += since polarized
 
-      // OPTIMIZATION: Handle PST.
-      // If piece is white (0-5), add. If black (6-11), subtract.
+      // +/- since pst is not polarized
       if (piece <= wK) score += pst_score[piece][square];
       else             score -= pst_score[piece][square];
 
@@ -2573,8 +2601,6 @@ static inline int eval() {
 
   // 2. Endgame "Mop-up" Evaluation
   // This forces the engine to mate instead of shuffling around with an advantage.
-
-  // Get King positions
   int white_king_sq = get_lsb_index(bitboards[wK]);
   int black_king_sq = get_lsb_index(bitboards[bK]);
 
@@ -2587,7 +2613,7 @@ static inline int eval() {
       score += cmd_score[black_king_sq];
 
       // 2. Close distance between Kings (Manhattan Distance)
-      int dist = abs(get_rank(white_king_sq) - get_rank(black_king_sq)) +
+      int dist = abs(get_rank[white_king_sq] - get_rank[black_king_sq]) +
                  abs(get_file(white_king_sq) - get_file(black_king_sq));
 
       // Reward being closer (14 is max distance)
@@ -2598,11 +2624,60 @@ static inline int eval() {
   else if (bitboards[wQ] == 0 && bitboards[wR] == 0 && bitboards[wN] == 0 && bitboards[wB] == 0) {
       score -= cmd_score[white_king_sq];
 
-      int dist = abs(get_rank(white_king_sq) - get_rank(black_king_sq)) +
+      int dist = abs(get_rank[white_king_sq] - get_rank[black_king_sq]) +
                  abs(get_file(white_king_sq) - get_file(black_king_sq));
 
       score -= (14 - dist) * 10;
   }
+
+
+  // 3. evaluating pawn structure
+
+  // isolated pawn penalty
+  int wP_file_count[8] = {0};
+  int bP_file_count[8] = {0};
+
+  U64 pawn_bb = bitboards[wP];
+  while(pawn_bb) {
+    square = get_lsb_index(pawn_bb);
+
+    wP_file_count[get_file(square)]++;
+
+    // applying passed pawn bonus
+    if (!(passed_pawns_mask[white][square] & bitboards[bP]))
+      score += passed_pawn_bonus[get_rank[square]];
+
+    // applying isolated pawn penalty
+    if(!(isolated_pawns_mask[square] & bitboards[wP]))
+      score += isolated_pawn_penalty;
+
+    pop_bit(pawn_bb, square);
+  }
+
+  pawn_bb = bitboards[bP];
+  while(pawn_bb) {
+    square = get_lsb_index(pawn_bb);
+
+    bP_file_count[get_file(square)]++;
+
+    // applying passed pawn bonus
+    if (!(passed_pawns_mask[black][square] & bitboards[wP]))
+      score -= passed_pawn_bonus[7 - get_rank[square]];
+
+    // applying isolated pawn penalty
+    if(!(isolated_pawns_mask[square] & bitboards[bP]))
+      score -= isolated_pawn_penalty;
+
+    pop_bit(pawn_bb, square);
+  }
+
+  for (int i = 0; i < 8; i++) {
+    if(wP_file_count[i])
+      score += double_pawn_penalty * (wP_file_count[i] - 1); // instead of adding a condition
+    if(bP_file_count[i])
+    score -= double_pawn_penalty * (bP_file_count[i] - 1); // if count > 1, penalty will be applied per double
+  }
+
 
   if(side_to_move == white) return score;
   return -score;
@@ -3459,28 +3534,7 @@ int main(void) {
   init_all();
 
   parse_fen(start_position);
-
-  print_bitboard_piece(a2, isolated_pawn_mask(a2));
-  print_bitboard_piece(a2, isolated_pawns_mask[a2]);
-
-  print_bitboard_piece(e2, isolated_pawn_mask(e2));
-  print_bitboard_piece(e2, isolated_pawns_mask[e2]);
-
-  print_bitboard_piece(h2, isolated_pawn_mask(h2));
-  print_bitboard_piece(h2, isolated_pawns_mask[h2]);
-
-  print_bitboard_piece(a2, passed_pawn_mask(white, a2));
-  print_bitboard_piece(a2, passed_pawns_mask[white][a2]);
-
-  print_bitboard_piece(e2, passed_pawn_mask(white, e2));
-  print_bitboard_piece(e2, passed_pawns_mask[white][e2]);
-
-  print_bitboard_piece(e7, passed_pawn_mask(black, e7));
-  print_bitboard_piece(e7, passed_pawns_mask[black][e7]);
-
-  print_bitboard_piece(h2, passed_pawn_mask(white, h2));
-  print_bitboard_piece(h2, passed_pawns_mask[white][h2]);
-
+  uci_loop();
 
   free(TranspositionTable);
   return 0;
