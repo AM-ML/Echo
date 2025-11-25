@@ -6,6 +6,7 @@ test
 echo
 *.exe
 *.pyc
+test.py
 
 # Prerequisites
 *.d
