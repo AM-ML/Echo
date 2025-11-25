@@ -179,7 +179,15 @@ U64 isolated_pawns_mask[64];
 U64 passed_pawns_mask[2][64];
 
 const int double_pawn_penalty = -15; // will apply twice
-const int isolated_pawn_penalty = -15;
+const int isolated_pawn_penalty = -5;
+
+const int RookOpenFileBonus = 15; // 5 since semi-open file bonus is also added (total: 15)
+const int RookSemiOpenFileBonus = 10;
+
+const int UnShieldedKingPenalty = 15;
+const int SemiShieldedKingPenalty = 10;
+
+const int ShieldedKingBonus = 5;
 
 // the closer you are to promotion, the better
 const int passed_pawn_bonus[8] = { 0, 5, 10, 20, 35, 60, 100, 200 };
@@ -2716,8 +2724,71 @@ static inline int eval() {
     }
   }
 
-  int final_score = (side_to_move == white ? score : -score);
 
+  // 4. OPEN / SEMI-OPEN FILE (BONUS/PENALTY)
+  U64 of_bb = bitboards[wR];
+  while(of_bb) {
+    square = get_lsb_index(of_bb);
+
+    // Open file bonus
+    if ( ((bitboards[wP] | bitboards[bP])  & pawns_file_mask[square]) == 0) {
+      score += RookOpenFileBonus;
+    } // Semi-open file bonus
+    if ( (bitboards[wP] & pawns_file_mask[square]) == 0) {
+      score += RookSemiOpenFileBonus;
+    }
+
+    pop_bit(of_bb, square);
+  }
+
+  of_bb = bitboards[bR];
+  while(of_bb) {
+    square = get_lsb_index(of_bb);
+
+    // Open file bonus
+    if ( ((bitboards[wP] | bitboards[bP]) & pawns_file_mask[square]) == 0) {
+      score -= RookOpenFileBonus;
+    } // Semi-open file bonus
+    if ( (bitboards[bP] & pawns_file_mask[square]) == 0) {
+      score -= RookSemiOpenFileBonus;
+    }
+
+    pop_bit(of_bb, square);
+  }
+
+  // shielded king bonus
+  of_bb = bitboards[wK];
+  while(of_bb) {
+    square = get_lsb_index(of_bb);
+
+    // Open file bonus
+    if ( ((bitboards[wP] | bitboards[bP])  & pawns_file_mask[square]) == 0) {
+      score -= UnShieldedKingPenalty;
+    } // Semi-open file bonus
+    if ( (bitboards[wP] & pawns_file_mask[square]) == 0) {
+      score -= SemiShieldedKingPenalty;
+    }
+
+    pop_bit(of_bb, square);
+  }
+
+  of_bb = bitboards[bK];
+  while(of_bb) {
+    square = get_lsb_index(of_bb);
+
+    // Open file bonus
+    if ( ((bitboards[wP] | bitboards[bP]) & pawns_file_mask[square]) == 0) {
+      score += UnShieldedKingPenalty;;
+    } // Semi-open file bonus
+    if ( (bitboards[bP] & pawns_file_mask[square]) == 0) {
+      score += SemiShieldedKingPenalty;
+    }
+
+    pop_bit(of_bb, square);
+  }
+
+
+  int final_score = (side_to_move == white ? score : -score);
   return final_score;
 }
 
