@@ -182,7 +182,7 @@ const int double_pawn_penalty = -15; // will apply twice
 const int isolated_pawn_penalty = -15;
 
 // the closer you are to promotion, the better
-const int passed_pawn_bonus[8] = { 0, 10, 15, 25, 40, 65, 100, 200 };
+const int passed_pawn_bonus[8] = { 0, 5, 10, 20, 35, 60, 100, 200 };
 
 // 0 0 1 _ 1 0 0 0
 static inline U64 isolated_pawn_mask(int square) {
@@ -200,42 +200,52 @@ static inline U64 passed_pawn_mask(int side, int square) {
   // since rank is inversed, 8 - rank will get it back to normal
   // each >> 8 will shift up by 1, so >> rank * 8 will shift up to the rank
   int WhiteVerticalShifter = (get_rank[square]) * 8;
-  int BlackVerticalShifter = (8 - get_rank[square]) * 8;
+  int BlackVerticalShifter = (7 - get_rank[square]) * 8;
   return (side == white)? fmask >> WhiteVerticalShifter : fmask << BlackVerticalShifter;
 }
 
 
 void init_pawns_eval_masks() {
-    for (int square = 0; square < 64; square++) {
-        pawns_file_mask[square] = file_mask(square);
-        pawns_rank_mask[square] = rank_mask(square);
-        isolated_pawns_mask[square] = isolated_pawn_mask(square);
+  // Loop over every square on the board
+  for (int rank = 0; rank < 8; rank++) {
+    for (int file = 0; file < 8; file++) {
+      int square = RF_2SQ(rank, file);
 
-        // Reset passed pawn masks
-        passed_pawns_mask[white][square] = 0ULL;
-        passed_pawns_mask[black][square] = 0ULL;
+      // Initialize standard masks
+      pawns_file_mask[square] = file_mask(square);
+      pawns_rank_mask[square] = rank_mask(square);
+      isolated_pawns_mask[square] = isolated_pawn_mask(square);
 
-        int tr = get_rank[square];
-        int tf = get_file(square);
+      // Reset passed pawn masks
+      passed_pawns_mask[white][square] = 0ULL;
+      passed_pawns_mask[black][square] = 0ULL;
 
-        for (int r = 0; r < 8; r++) {
-            for (int f = 0; f < 8; f++) {
-                int sq = RF_2SQ(r, f);
-
-                if (abs(tf - f) <= 1) {
-                   if (r < tr) {
-                        set_bit(passed_pawns_mask[white][square], sq);
-                    }
-
-                    if (r > tr) {
-                        set_bit(passed_pawns_mask[black][square], sq);
-                    }
-                }
-            }
+      // --- WHITE PASSED PAWN MASK ---
+      // White moves "up" towards Rank 0.
+      // We check Ranks 0 to (current_rank - 1).
+      for (int r = 0; r < rank; r++) {
+        // Check left file, current file, right file
+        for (int f = file - 1; f <= file + 1; f++) {
+          if (f >= 0 && f <= 7) { // Ensure file is on board
+            set_bit(passed_pawns_mask[white][square], RF_2SQ(r, f));
+          }
         }
-    }
-}
+      }
 
+      // --- BLACK PASSED PAWN MASK ---
+      // Black moves "down" towards Rank 7.
+      // We check Ranks (current_rank + 1) to 7.
+      for (int r = rank + 1; r < 8; r++) {
+        // Check left file, current file, right file
+        for (int f = file - 1; f <= file + 1; f++) {
+          if (f >= 0 && f <= 7) { // Ensure file is on board
+            set_bit(passed_pawns_mask[black][square], RF_2SQ(r, f));
+          }
+        }
+      }
+    }
+  }
+}
 
 
 static inline int get_lsb_index(U64 bitboard) {
@@ -2567,14 +2577,14 @@ static int mvv_lva[12][12] = {
 
 // bonus for pushing enemy king closer to the edges (for checkmating)
 const int cmd_score[64] = {
-    80, 60, 40,  20,  20, 40, 60, 80,
-    60, 40, 20,   8,   8, 20, 40, 60,
-    40, 20,  8,   4,   4,  8, 20, 40,
-    20, 20,  4,   0,   0,  4,  8, 20,
-    20, 20,  4,   0,   0,  4,  8, 20,
-    40, 20,  8,   4,   4,  8, 20, 40,
-    60, 40, 20,   8,   8,  5, 40 ,60,
-    80, 60, 40,  20,  20, 40, 60, 80
+    60, 45, 30, 15, 15, 30, 45, 60,
+    45, 30, 15,  6,  6, 15, 30, 45,
+    30, 15,  6,  3,  3,  6, 15, 30,
+    15,  6,  3,  0,  0,  3,  6, 15,
+    15,  6,  3,  0,  0,  3,  6, 15,
+    30, 15,  6,  3,  3,  6, 15, 30,
+    45, 30, 15,  6,  6, 15, 30, 45,
+    60, 45, 30, 15, 15, 30, 45, 60
 };
 
 
@@ -2583,105 +2593,135 @@ static inline int eval() {
   U64 cur_bb;
   int square;
 
-  // Unrolling the loop manually for White and Black parts helps the CPU pipeline
+  // 1. MATERIAL + PST
   for (int piece = wP; piece <= bK; piece++) {
     cur_bb = bitboards[piece];
-    while(cur_bb) {
+
+    while (cur_bb) {
       square = get_lsb_index(cur_bb);
 
-      score += material_score[piece]; // += since polarized
+      int material = material_score[piece];
+      int pst = pst_score[piece][square];
+      int net = (piece <= wK ? material + pst : material - pst);
 
-      // +/- since pst is not polarized
-      if (piece <= wK) score += pst_score[piece][square];
-      else             score -= pst_score[piece][square];
+      score += net;
 
       pop_bit(cur_bb, square);
     }
   }
 
-  // 2. Endgame "Mop-up" Evaluation
-  // This forces the engine to mate instead of shuffling around with an advantage.
+  // 2. MOP-UP ENDGAME
   int white_king_sq = get_lsb_index(bitboards[wK]);
   int black_king_sq = get_lsb_index(bitboards[bK]);
 
-  // Logic: If White has a significant material advantage (no Queens/Rooks on black side)
-  // We incentivize pushing the Black King to the corner and bringing White King closer.
 
-  // Simplified Check: Does Black lack major pieces?
-  if (bitboards[bQ] == 0 && bitboards[bR] == 0 && bitboards[bN] == 0 && bitboards[bB] == 0) {
-      // 1. Push enemy King to corner (CMD Score)
-      score += cmd_score[black_king_sq];
+  int white_mat =
+    count_bits(bitboards[wP]) * material_score[wP] +
+    count_bits(bitboards[wN]) * material_score[wN] +
+    count_bits(bitboards[wB]) * material_score[wB] +
+    count_bits(bitboards[wR]) * material_score[wR] +
+    count_bits(bitboards[wQ]) * material_score[wQ];
 
-      // 2. Close distance between Kings (Manhattan Distance)
-      int dist = abs(get_rank[white_king_sq] - get_rank[black_king_sq]) +
-                 abs(get_file(white_king_sq) - get_file(black_king_sq));
+  int black_mat =
+    count_bits(bitboards[bP]) * -material_score[bP] +
+    count_bits(bitboards[bN]) * -material_score[bN] +
+    count_bits(bitboards[bB]) * -material_score[bB] +
+    count_bits(bitboards[bR]) * -material_score[bR] +
+    count_bits(bitboards[bQ]) * -material_score[bQ];
 
-      // Reward being closer (14 is max distance)
-      score += (14 - dist) * 10;
+  int material_diff = white_mat - black_mat;
+
+  int dist = abs(get_rank[white_king_sq] - get_rank[black_king_sq]) +
+    abs(get_file(white_king_sq) - get_file(black_king_sq));
+
+  if (material_diff > 300) {
+    score += cmd_score[black_king_sq];
+
+    int scale_factor = material_diff / 200;
+    if (scale_factor > 4) scale_factor = 4;
+    int kd_bonus = (14 - dist) * scale_factor; // bigger difference = more encouragement
+    score += kd_bonus;
+  }
+  else if (material_diff < -300) {
+    score -= cmd_score[white_king_sq];
+
+    int scale_factor = -material_diff / 200;
+    if (scale_factor > 4) scale_factor = 4;
+
+    int kd_bonus = (14 - dist) * scale_factor; // bigger difference = more encouragement
+
+    score -= kd_bonus;
   }
 
-  // Same logic for Black advantage
-  else if (bitboards[wQ] == 0 && bitboards[wR] == 0 && bitboards[wN] == 0 && bitboards[wB] == 0) {
-      score -= cmd_score[white_king_sq];
-
-      int dist = abs(get_rank[white_king_sq] - get_rank[black_king_sq]) +
-                 abs(get_file(white_king_sq) - get_file(black_king_sq));
-
-      score -= (14 - dist) * 10;
-  }
-
-
-  // 3. evaluating pawn structure
-
-  // isolated pawn penalty
+  // 3. PAWN STRUCTURE
   int wP_file_count[8] = {0};
   int bP_file_count[8] = {0};
 
   U64 pawn_bb = bitboards[wP];
-  while(pawn_bb) {
+
+  while (pawn_bb) {
     square = get_lsb_index(pawn_bb);
+    int r = get_rank[square];
+    int f = get_file(square);
 
-    wP_file_count[get_file(square)]++;
+    wP_file_count[f]++;
 
-    // applying passed pawn bonus
-    if (!(passed_pawns_mask[white][square] & bitboards[bP]))
-      score += passed_pawn_bonus[get_rank[square]];
+    // Passed Pawn
+    if (!(passed_pawns_mask[white][square] & bitboards[bP])) {
+      int bonus = passed_pawn_bonus[r];
+      score += bonus;
+    }
 
-    // applying isolated pawn penalty
-    if(!(isolated_pawns_mask[square] & bitboards[wP]))
+    // Isolated Pawn
+    if (!(isolated_pawns_mask[square] & bitboards[wP])) {
       score += isolated_pawn_penalty;
+    }
 
     pop_bit(pawn_bb, square);
   }
 
   pawn_bb = bitboards[bP];
-  while(pawn_bb) {
+
+  while (pawn_bb) {
     square = get_lsb_index(pawn_bb);
+    int r = get_rank[square];
+    int f = get_file(square);
 
-    bP_file_count[get_file(square)]++;
+    bP_file_count[f]++;
 
-    // applying passed pawn bonus
-    if (!(passed_pawns_mask[black][square] & bitboards[wP]))
-      score -= passed_pawn_bonus[7 - get_rank[square]];
+    // Passed Pawn
+    if (!(passed_pawns_mask[black][square] & bitboards[wP])) {
+      int bonus = passed_pawn_bonus[7 - r];
+      score -= bonus;
+    }
 
-    // applying isolated pawn penalty
-    if(!(isolated_pawns_mask[square] & bitboards[bP]))
+    // Isolated Pawn
+    if (!(isolated_pawns_mask[square] & bitboards[bP])) {
       score -= isolated_pawn_penalty;
+    }
 
     pop_bit(pawn_bb, square);
   }
 
+  // Doubled Pawns
   for (int i = 0; i < 8; i++) {
-    if(wP_file_count[i])
-      score += double_pawn_penalty * (wP_file_count[i] - 1); // instead of adding a condition
-    if(bP_file_count[i])
-    score -= double_pawn_penalty * (bP_file_count[i] - 1); // if count > 1, penalty will be applied per double
+    if (wP_file_count[i] > 1) {
+      int p = double_pawn_penalty * (wP_file_count[i] - 1);
+      score += p;
+    }
+
+    if (bP_file_count[i] > 1) {
+      int p = double_pawn_penalty * (bP_file_count[i] - 1);
+      score -= p;
+    }
   }
 
+  int final_score = (side_to_move == white ? score : -score);
 
-  if(side_to_move == white) return score;
-  return -score;
+  return final_score;
 }
+
+
 
 #define MAX_PLY 128
 #define MATE_VALUE 49000
@@ -3501,6 +3541,10 @@ void uci_loop() {
 
     if (strncmp(input, "go", 2) == 0) {
       parse_go(input); continue;
+    }
+
+    if (strncmp(input, "eval", 4) == 0) {
+      printf("eval: %d\n", eval()); continue;
     }
 
     if (strncmp(input, "quit", 4) == 0 ) {
