@@ -70,57 +70,6 @@ make win   # Cross-compile for Windows
 ./bin/echo
 ```
 
-# Search Architecture (Summary)
-
-## Zobrist Hashing
-
-* Random 64-bit keys for piece–square, castling, en-passant, and side to move.
-* Enables fast repetition detection and TT indexing.
-
-## Transposition Table
-
-* Stores key, depth, score, flag, and best move.
-* Functions: `probeTT()`, `storeTT()`, `probe_move()`.
-
-## Negamax + Alpha–Beta
-
-* Core search: `score = -negamax(-beta, -alpha, depth-1)`.
-* Integrates TT lookups, repetition checks, move ordering, and extensions.
-
-## Principal Variation Search (PVS)
-
-* Zero-width search for non-PV moves with full re-search if needed.
-
-## Null Move Pruning
-
-* Skips a move to test for fail-highs. Disabled in check and in certain endgames.
-
-## Late Move Reductions (LMR)
-
-* Reduces depth for quiet, late moves; re-search if promising.
-
-## Quiescence Search
-
-* Extends into captures to avoid horizon effects. Uses MVV/LVA and delta pruning.
-
-## Move Ordering
-
-Priority: TT move → PV move → captures (MVV/LVA) → killers → history.
-
-## Search Extensions
-
-Extensions for checks, promotions, and tactical recaptures.
-
-## Repetition Detection
-
-Uses Zobrist keys; threefold repetition returns draw.
-
-# Evaluation
-
-* Material values
-* Piece-Square Tables (PST)
-* Endgame mop-up heuristics (king activity and cornering when ahead)
-
 # UCI Support
 
 Supported commands:
@@ -179,7 +128,7 @@ search_position
 # Credits
 
 Echo was built using insights & inspiration from: 
-* <b>Maksim Korzh (Code Monkey King)</b>: His engine series (BBC) and magic-bitboard explanations were foundational.
+* <b>Maksim Korzh (Code Monkey King)</b>: His engine series (BBC) and explanations were definitely foundational.
 * <b>Sebastian Lague</b>: His chess-AI educational videos and source code influenced search architecture.
 * <b>BluefeverSoftware (VICE engine)</b> The VICE series provided practical, production-grade patterns for UCI + search structure.
 
