@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center"><b>E C H O — A Bitboard Chess Engine</b></h1>
-<p align="center"><sub>~2200 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
+<p align="center"><sub>~2230 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
 
 <p align="center">
   <img alt="language" src="https://img.shields.io/badge/language-C-blue">
@@ -14,8 +14,7 @@
 
 # Introduction
 
-Echo is a compact C bitboard chess engine focused on clarity, performance, and a classical alpha–beta search architecture. This README documents the engine's search, evaluation, pruning techniques, and UCI interface.
-
+Echo is a compact C bitboard chess engine focused on performance, and a classical alpha–beta search architecture.
 # Key Concepts
 
 - Zobrist hashing  
@@ -105,19 +104,6 @@ Outputs standard `info` lines and `bestmove`.
 | Evaluation           | `eval()`                            |
 | UCI                  | `parse_position`, `parse_go`        |
 
-# Search Flow (compact)
-
-```
-search_position
-  └─ Iterative Deepening
-      └─ Negamax
-          ├─ Move Ordering (TT → PV → Captures → Killers → History)
-          ├─ Alpha–Beta / PVS
-          ├─ LMR
-          ├─ Null Move Pruning
-          └─ Quiescence
-```
-
 # Debug & Dev Tools
 
 * `print_board()` — ASCII/Unicode board
@@ -127,9 +113,9 @@ search_position
 
 # Credits
 
-Echo was built using insights & inspiration from: 
-* <b>Maksim Korzh (Code Monkey King)</b>: His engine series (BBC) and explanations were definitely foundational.
-* <b>Sebastian Lague</b>: His chess-AI educational videos and source code influenced search architecture.
+Echo was built on the shoulders of these giants:
+* <b>Maksim Korzh (Code Monkey King)</b>: His engine series (BBC) was extremely useful.
+* <b>Sebastian Lague</b>: His chess-AI educational videos and source code influenced search architecture (very entertaining).
 * <b>BluefeverSoftware (VICE engine)</b> The VICE series provided practical, production-grade patterns for UCI + search structure.
 
 A huge thanks to all three — their contributions shaped the modern hobbyist chess-engine community.
