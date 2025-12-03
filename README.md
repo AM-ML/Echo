@@ -27,7 +27,10 @@ Echo is a compact C bitboard chess engine focused on performance, and a classica
 - Search extensions  
 - Killer & history heuristics  
 - Iterative deepening  
-- Move ordering (TT, PV, captures, killers, history)  
+- Move ordering (TT, PV, captures, killers, history)
+- Pawn structure evaluation
+- King safety
+- piece mobility
 - Aspiration windows  
 - Threefold repetition detection  
 - UCI protocol support
