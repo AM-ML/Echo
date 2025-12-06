@@ -16,6 +16,7 @@
 #define FORCE_ASCII 0
 #endif
 
+
 #define INF 1000000
 #define NEG_INF -1000000
 
@@ -2351,8 +2352,12 @@ static void communicate() {
 
 // Initialized with White Pieces (indices 0-5).
 // Black pieces (indices 6-11) are initialized to 0 and filled by init_black_pst().
+
+// These values include the material score within the PST,
+// so we don't need a separate material_score array for the PST calculation logic.
+
+// Middle Game Tables
 int mg_pst[12][64] = {
-    // [wP] White Pawn (Your Original Values)
     [wP] = {
           0,   0,   0,   0,   0,   0,   0,   0,
          98, 134,  61,  95,  68, 126,  34, -11,
@@ -2363,141 +2368,122 @@ int mg_pst[12][64] = {
         -35,  -1, -20, -23, -15,  24,  38, -22,
           0,   0,   0,   0,   0,   0,   0,   0
     },
-
-    // [wN] White Knight (Stockfish MG)
     [wN] = {
-        -201, -100, -56, -26, -26, -56, -100, -201,
-         -67,  -27,   4,  37,  37,   4,  -27,  -67,
-          -9,   22,  58,  53,  53,  58,   22,   -9,
-         -34,   13,  44,  51,  51,  44,   13,  -34,
-         -35,    8,  40,  49,  49,  40,    8,  -35,
-         -61,  -17,   6,  12,  12,   6,  -17,  -61,
-         -77,  -41, -27, -15, -15, -27,  -41,  -77,
-        -175,  -92, -74, -73, -73, -74,  -92, -175
+        -167, -89, -34, -49,  61, -97, -15, -107,
+        -73, -41,  72,  36,  23,  62,   7, -17,
+        -47,  60,  37,  65,  84, 129,  73,  44,
+         -9,  17,  19,  53,  37,  69,  18,  22,
+        -13,   4,  16,  13,  28,  19,  21,  -8,
+        -23,  -9,  12,  10,  19,  17,  25, -16,
+        -29, -53, -12,  -3,  -1,  18, -14, -19,
+        -105, -21, -58, -33, -17, -28, -19, -23
     },
-
-    // [wB] White Bishop (Stockfish MG)
     [wB] = {
-        -48,   1, -14, -23, -23, -14,   1, -48,
-        -17, -14,   5,   0,   0,   5, -14, -17,
-        -16,   6,   1,  11,  11,   1,   6, -16,
-        -12,  29,  22,  31,  31,  22,  29, -12,
-         -5,  11,  25,  39,  39,  25,  11,  -5,
-         -7,  21,  -5,  17,  17,  -5,  21,  -7,
-        -15,   8,  19,   4,   4,  19,   8, -15,
-        -53,  -5,  -8, -23, -23,  -8,  -5, -53
+        -29,   4, -82, -37, -25, -42,   7,  -8,
+        -26,  16, -18, -13,  30,  59,  18, -47,
+        -16,  37,  43,  40,  35,  50,  37,  -2,
+         -4,   5,  19,  50,  37,  37,   7,  -2,
+         -6,  13,  13,  26,  34,  12,  10,   4,
+          0,  15,  15,  15,  14,  27,  18,  10,
+          4,  15,  16,   9,  23,  44,  13, -22,
+        -33,  -3, -14, -21, -13, -12, -39, -21
     },
-
-    // [wR] White Rook (Stockfish MG)
     [wR] = {
-        -17, -19,  -1,   9,   9,  -1, -19, -17,
-         -2,  12,  16,  18,  18,  16,  12,  -2,
-        -22,  -2,   6,  12,  12,   6,  -2, -22,
-        -27, -15,  -4,   3,   3,  -4, -15, -27,
-        -13,  -5,  -4,  -6,  -6,  -4,  -5, -13,
-        -25, -11,  -1,   3,   3,  -1, -11, -25,
-        -21, -13,  -8,   6,   6,  -8, -13, -21,
-        -31, -20, -14,  -5,  -5, -14, -20, -31
+         32,  42,  32,  51,  63,   9,  31,  43,
+         27,  32,  58,  62,  80,  67,  26,  44,
+         -5,  19,  26,  36,  17,  45,  61,  16,
+        -24, -11,   7,  26,  24,  35,  -8, -20,
+        -36, -26, -12,  -1,   9,  -7,   6, -23,
+        -45, -25, -16, -17,   3,   0,  -5, -33,
+        -44, -16, -20,  -9,  -1,  11,  -6, -71,
+        -19, -13,   1,  17,  16,   7, -37, -26
     },
-
-    // [wQ] White Queen (Stockfish MG)
     [wQ] = {
-         -2,  -2,   1,  -2,  -2,   1,  -2,  -2,
-         -5,   6,  10,   8,   8,  10,   6,  -5,
-         -4,  10,   6,   8,   8,   6,  10,  -4,
-          0,  14,  12,   5,   5,  12,  14,   0,
-          4,   5,   9,   8,   8,   9,   5,   4,
-         -3,   6,  13,   7,   7,  13,   6,  -3,
-         -3,   5,   8,  12,  12,   8,   5,  -3,
-          3,  -5,  -5,   4,   4,  -5,  -5,   3
+        -28,   0,  29,  12,  59,  44,  43,  45,
+        -24, -39,  -5,   1, -16,  57,  28,  54,
+        -13, -17,   7,   8,  29,  56,  47,  57,
+        -27, -27, -16, -16,  -1,  17,  -2,   1,
+         -9, -26,  -9, -10,  -2,  -4,   3,  -3,
+        -14,   2, -11,  -2,  -5,   2,  14,   5,
+        -35,  -8,  11,   2,   8,  15,  -3,   1,
+         -1, -18,  -9,  10, -15, -25, -31, -50
     },
-
-    // [wK] White King (Stockfish MG)
     [wK] = {
-         59,  89,  45,  -1,  -1,  45,  89,  59,
-         88, 120,  65,  33,  33,  65, 120,  88,
-        123, 145,  81,  31,  31,  81, 145, 123,
-        154, 179, 105,  70,  70, 105, 179, 154,
-        164, 190, 138,  98,  98, 138, 190, 164,
-        195, 258, 169, 120, 120, 169, 258, 195,
-        278, 303, 234, 179, 179, 234, 303, 278,
-        271, 327, 271, 198, 198, 271, 327, 271
+        -65,  23,  16, -15, -56, -34,   2,  13,
+         29,  -1, -20,  -7,  -8,  -4, -38, -29,
+         -9,  24,   2, -16, -20,   6,  22, -22,
+        -17, -20, -12, -27, -30, -25, -14, -36,
+        -49,  -1, -27, -39, -46, -44, -33, -51,
+        -14, -14, -22, -46, -44, -30, -15, -27,
+          1,   7,  -8, -64, -43, -16,   9,   8,
+        -15,  36,  12, -54,   8, -28,  24,  14
     }
 };
 
+// End Game Tables
 int eg_pst[12][64] = {
-    // [wP] White Pawn (Same as MG)
     [wP] = {
           0,   0,   0,   0,   0,   0,   0,   0,
-         98, 134,  61,  95,  68, 126,  34, -11,
-         -6,   7,  26,  31,  65,  56,  25, -20,
-        -14,  13,   6,  21,  23,  12,  17, -23,
-        -27,  -2,  -5,  12,  17,   6,  10, -25,
-        -26,  -4,  -4, -10,   3,   3,  33, -12,
-        -35,  -1, -20, -23, -15,  24,  38, -22,
+        178, 173, 158, 134, 147, 132, 165, 187,
+         94, 100,  85, 118, 120,  91,  65,  93,
+         32,  24,  13,   5,  -2,   4,  17,  17,
+         13,   9,  -3,  -7,  -7,  -8,   3,  -1,
+          4,   7,  -6,   1,   0,  -5,  -1,  -8,
+         13,   8,   8,  10,  13,   0,   2,  -7,
           0,   0,   0,   0,   0,   0,   0,   0
     },
-
-    // [wN] White Knight (Stockfish EG)
     [wN] = {
-        -100, -88, -56, -17, -17, -56, -88, -100,
-         -69, -50, -51,  12,  12, -51, -50,  -69,
-         -51, -44, -16,  17,  17, -16, -44,  -51,
-         -45, -16,   9,  39,  39,   9, -16,  -45,
-         -35,  -2,  13,  28,  28,  13,  -2,  -35,
-         -40, -27,  -8,  29,  29,  -8, -27,  -40,
-         -67, -54, -18,   8,   8, -18, -54,  -67,
-         -96, -65, -49, -21, -21, -49, -65, -96
+        -58, -38, -13, -28, -31, -27, -63, -99,
+        -25,  -8, -25,  -2,  -9, -25, -24, -52,
+        -24, -20,  10,   9,  -1,  -9, -19, -41,
+        -17,   3,  22,  22,  22,  11,   8, -18,
+        -18,  -6,  16,  25,  16,  17,   4, -18,
+        -23,  -3,  -1,  15,  10,  -3, -20, -22,
+        -42, -20, -10,  -5,  -2, -20, -23, -44,
+        -29, -51, -23, -15, -22, -18, -50, -64
     },
-
-    // [wB] White Bishop (Stockfish EG)
     [wB] = {
-        -46, -42, -37, -24, -24, -37, -42, -46,
-        -31, -20,  -1,   1,   1,  -1, -20, -31,
-        -30,   6,   4,   6,   6,   4,   6, -30,
-        -17,  -1, -14,  15,  15, -14,  -1, -17,
-        -20,  -6,   0,  17,  17,   0,  -6, -20,
-        -16,  -1,  -2,  10,  10,  -2,  -1, -16,
-        -37, -13, -17,   1,   1, -17, -13, -37,
-        -57, -30, -37, -12, -12, -37, -30, -57
+        -14, -21, -11,  -8,  -7,  -9, -17, -24,
+         -8,  -4,   7, -12, -3, -13,  -4, -14,
+          2,  -8,   0,  -1, -13,   6,   0,   4,
+         -3,   9,  12,   4,  14,  12,  -2,   0,
+         -6,   3,  13,  19,   7,  10,  -3, -9,
+        -12,  -3,   8,  10,  13,   3,  -7, -15,
+        -24, -18,  -7,  -2,  -4, -10, -10, -25,
+        -23,  -3, -23,  -5, -16, -20, -14, -17
     },
-
-    // [wR] White Rook (Stockfish EG)
     [wR] = {
-         18,   0,  19,  13,  13,  19,   0,  18,
-          4,   5,  20,  -5,  -5,  20,   5,   4,
-          6,   1,  -7,  10,  10,  -7,   1,   6,
-         -5,   8,   7,  -6,  -6,   7,   8,  -5,
-         -6,   1,  -9,   7,   7,  -9,   1,  -6,
-          6,  -8,  -2,  -6,  -6,  -2,  -8,   6,
-        -12,  -9,  -1,  -2,  -2,  -1,  -9, -12,
-         -9, -13, -10,  -9,  -9, -10, -13,  -9
+         13,  10,  18,  15,  12,  12,   8,   5,
+         11,  13,  13,  11,  -3,   3,   8,   3,
+          7,   7,   7,   5,   4,  -3,  -5,  -3,
+          4,   3,  13,   1,   2,   1,  -1,   2,
+          3,   5,   8,   4,  -5,  -6,  -8, -11,
+         -4,   0,  -5,  -1,  -7, -12,  -8, -16,
+         -6,  -6,   0,   2,  -9,  -9, -11,  -3,
+         -9,   2,   3,  -1,  -5, -13,   4, -17
     },
-
-    // [wQ] White Queen (Stockfish EG)
     [wQ] = {
-        -75, -52, -43, -36, -36, -43, -52, -75,
-        -50, -27, -24,  -8,  -8, -24, -27, -50,
-        -38, -18, -12,   1,   1, -12, -18, -38,
-        -29,  -6,   9,  21,  21,   9,  -6, -29,
-        -23,  -3,  13,  24,  24,  13,  -3, -23,
-        -39, -18,  -9,   3,   3,  -9, -18, -39,
-        -55, -31, -22,  -4,  -4, -22, -31, -55,
-        -69, -57, -47, -26, -26, -47, -57, -69
+         -9,  22,  22,  27,  27,  19,  10,  20,
+        -17,  20,  32,  41,  58,  25,  30,   0,
+        -20,   6,   9,  49,  47,  35,  19,   9,
+          3,  22,  24,  45,  57,  40,  31,  -7,
+        -18,  28,  19,  47,  31,  34,  39,  -6,
+        -16, -27,  15,  6,    9,  17,  10,   5,
+        -22, -23, -30, -16, -16, -23, -36, -32,
+        -33, -28, -22, -43,  -5, -32, -20, -41
     },
-
-    // [wK] White King (Stockfish EG)
     [wK] = {
-         11,  59,  73,  78,  78,  73,  59,  11,
-         47, 121, 116, 131, 131, 116, 121,  47,
-         92, 172, 184, 191, 191, 184, 172,  92,
-         96, 166, 199, 199, 199, 199, 166,  96,
-        103, 156, 172, 172, 172, 172, 156, 103,
-         88, 130, 169, 175, 175, 169, 130,  88,
-         53, 100, 133, 135, 135, 133, 100,  53,
-          1,  45,  85,  76,  76,  85,  45,   1
+        -74, -35, -18, -18, -11,  15,   4, -17,
+        -12,  17,  14,  17,  17,  38,  23,  11,
+         10,  17,  23,  15,  20,  45,  44,  13,
+         -8,  22,  24,  27,  26,  33,  26,   3,
+        -18,  -4,  21,  24,  27,  23,   9, -11,
+        -19,  -3,  11,  21,  23,  16,   7,  -9,
+        -27, -11,   4,  13,  14,   4,  -5, -17,
+        -53, -34, -21, -11, -28, -14, -24, -43
     }
 };
+
 
 // mirror white pst (flip horizontally & negate)
 void init_black_pst() {
@@ -2515,21 +2501,24 @@ void init_black_pst() {
   }
 }
 
-// Updated material values (more standard)
+
+// Material scores are now mostly embedded in PST, but base values help helper functions
+// These are PeSTO base material values
 int material_score[12] = {
-  100,   // wP
-  320,   // wN
-  330,   // wB
-  500,   // wR
-  900,   // wQ
-  20000, // wK
-  -100,  // bP
-  -320,  // bN
-  -330,  // bB
-  -500,  // bR
-  -900,  // bQ
-  -20000 // bK
+       82, // wP
+      337, // wN
+      365, // wB
+      477, // wR
+     1025, // wQ
+    12000, // wK
+      -82, // bP
+     -337, // bN
+     -365, // bB
+     -477, // bR
+    -1025, // bQ
+    -12000 // bK
 };
+
 
 // Most Valuable Victim (MVV) - Least Valuable Attacker lookup table (LVA)
 static int mvv_lva[12][12] = {
@@ -2587,323 +2576,175 @@ static inline int calculatePhaseFactor() {
   return (phase > 256)? 256 : phase; // 0 = endgame -> 1 = middlegame
 }
 
-// !!!WARNING!!!: phase variable should be defined locally before using this dangerous macro.
-#define blend_pst(piece, square) ( \
-  (int)                           (phase * (mg_pst[piece][square])) \
-+ (int)                           ((1 - phase) * eg_pst[piece][square]) )
+// --- IMPROVED EVALUATION FUNCTION ---
+
+// Bonus for having the right to move (Tempo)
+const int tempo_bonus = 20;
+
+// Weighted Mobility: (Count - Offset) * Weight
+// If result is negative, it becomes a penalty.
+//                                      N    B    R    Q
+const int mobility_bonus_offset[4] = {  0,   0,   4,   2 }; // Rooks need ~4 squares to be happy
+const int mobility_bonus_weight[4] = {  0,   5,   2,   1 }; // Bishops benefit most from open diagonals
 
 static inline int eval() {
-  int score = 0;
   int mg_score = 0;
   int eg_score = 0;
-  U64 cur_bb;
-  int square;
   int phase = calculatePhaseFactor();
 
-  // ==================================================================
-  // 1. MATERIAL + PST FOR NON-PAWN, NON-SPECIAL PIECES (N, B, R, Q, K)
-  // ==================================================================
-  // Note: Pawns, Rooks, Bishops, Queens, and Kings are handled separately
-  // below to include additional positional logic
+  // 1. Piece-Square Tables (Includes Material)
+  // We don't add material_score[] separately because PeSTO tables
+  // are designed to be self-contained (Position + Material).
 
   for (int piece = wP; piece <= bK; piece++) {
-    // Skip pieces that have special handling below
-    if (piece == wP || piece == bP) continue;  // Pawns: handled in section 3
-    if (piece == wR || piece == bR) continue;  // Rooks: open/semi-open file logic
-    if (piece == wK || piece == bK) continue;  // Kings: king safety logic
-    if (piece == wB || piece == bB) continue;  // Bishops: mobility bonus
-    if (piece == wQ || piece == bQ) continue;  // Queens: mobility bonus
-
-    cur_bb = bitboards[piece];
-
-    while (cur_bb) {
-      square = get_lsb_index(cur_bb);
+    U64 bitboard = bitboards[piece];
+    while (bitboard) {
+      int square = get_lsb_index(bitboard);
       mg_score += mg_pst[piece][square] + material_score[piece];
       eg_score += eg_pst[piece][square] + material_score[piece];
-
-      pop_bit(cur_bb, square);
+      pop_bit(bitboard, square);
     }
   }
 
-  // ==================================================================
-  // 2. MOP-UP ENDGAME (King distance in winning positions)
-  // ==================================================================
-  int white_king_sq = get_lsb_index(bitboards[wK]);
-  int black_king_sq = get_lsb_index(bitboards[bK]);
+  // 2. Mobility (Weighted)
+  // Only for Bishops(2), Rooks(3), Queens(4)
+  // (Knights usually handled well enough by PST, but can be added if desired)
 
-  int white_mat =
-    count_bits(bitboards[wP]) * material_score[wP] +
-    count_bits(bitboards[wN]) * material_score[wN] +
-    count_bits(bitboards[wB]) * material_score[wB] +
-    count_bits(bitboards[wR]) * material_score[wR] +
-    count_bits(bitboards[wQ]) * material_score[wQ];
+  int score = 0; // Positional terms added to both MG/EG equally (simplified)
 
-  int black_mat =
-    count_bits(bitboards[bP]) * -material_score[bP] +
-    count_bits(bitboards[bN]) * -material_score[bN] +
-    count_bits(bitboards[bB]) * -material_score[bB] +
-    count_bits(bitboards[bR]) * -material_score[bR] +
-    count_bits(bitboards[bQ]) * -material_score[bQ];
+  // --- WHITE MOBILITY ---
+  // Bishops
+  U64 b_moves = 0, r_moves = 0, q_moves = 0;
+  int b_count = 0, r_count = 0, q_count = 0;
 
-  int material_diff = white_mat - black_mat;
-
-  int dist = abs(get_rank_index(white_king_sq) - get_rank_index(black_king_sq)) +
-    abs(get_file(white_king_sq) - get_file(black_king_sq));
-
-  if (material_diff > 300) {
-    score += cmd_score[black_king_sq];
-
-    int scale_factor = material_diff / 200;
-    if (scale_factor > 4) scale_factor = 4;
-    int kd_bonus = (14 - dist) * scale_factor;
-    score += kd_bonus;
+  U64 bb = bitboards[wB];
+  while(bb) {
+      int sq = get_lsb_index(bb);
+      b_moves = get_bishop_attacks(sq, sides_occupancies[both]);
+      b_count += count_bits(b_moves);
+      pop_bit(bb, sq);
   }
-  else if (material_diff < -300) {
-    score -= cmd_score[white_king_sq];
+  score += (b_count - mobility_bonus_offset[1]) * mobility_bonus_weight[1];
 
-    int scale_factor = -material_diff / 200;
-    if (scale_factor > 4) scale_factor = 4;
+  // Rooks
+  bb = bitboards[wR];
+  while(bb) {
+      int sq = get_lsb_index(bb);
+      r_moves = get_rook_attacks(sq, sides_occupancies[both]);
+      r_count += count_bits(r_moves);
 
-    int kd_bonus = (14 - dist) * scale_factor;
-    score -= kd_bonus;
+      // Open/Semi-Open File Logic integrated here
+      if (!(pawns_file_mask[sq] & bitboards[wP])) {
+          score += RookSemiOpenFileBonus;
+          if (!(pawns_file_mask[sq] & bitboards[bP])) {
+              score += RookOpenFileBonus;
+          }
+      }
+
+      pop_bit(bb, sq);
   }
+  score += (r_count - mobility_bonus_offset[2]) * mobility_bonus_weight[2];
 
-  // ==================================================================
-  // 3. PAWN STRUCTURE (Passed, Isolated, Doubled) + Material + PST
-  // ==================================================================
-  int wP_file_count[8] = {0};
-  int bP_file_count[8] = {0};
+  // Queens
+  bb = bitboards[wQ];
+  while(bb) {
+      int sq = get_lsb_index(bb);
+      // Queen is Bishop + Rook attacks
+      q_moves = get_queen_attacks(sq, sides_occupancies[both]);
+      q_count += count_bits(q_moves);
+      pop_bit(bb, sq);
+  }
+  score += (q_count - mobility_bonus_offset[3]) * mobility_bonus_weight[3];
 
+  // --- BLACK MOBILITY ---
+  b_count = 0; r_count = 0; q_count = 0;
+
+  // Bishops
+  bb = bitboards[bB];
+  while(bb) {
+      int sq = get_lsb_index(bb);
+      b_moves = get_bishop_attacks(sq, sides_occupancies[both]);
+      b_count += count_bits(b_moves);
+      pop_bit(bb, sq);
+  }
+  score -= (b_count - mobility_bonus_offset[1]) * mobility_bonus_weight[1];
+
+  // Rooks
+  bb = bitboards[bR];
+  while(bb) {
+      int sq = get_lsb_index(bb);
+      r_moves = get_rook_attacks(sq, sides_occupancies[both]);
+      r_count += count_bits(r_moves);
+
+      if (!(pawns_file_mask[sq] & bitboards[bP])) {
+          score -= RookSemiOpenFileBonus;
+          if (!(pawns_file_mask[sq] & bitboards[wP])) {
+              score -= RookOpenFileBonus;
+          }
+      }
+      pop_bit(bb, sq);
+  }
+  score -= (r_count - mobility_bonus_offset[2]) * mobility_bonus_weight[2];
+
+  // Queens
+  bb = bitboards[bQ];
+  while(bb) {
+      int sq = get_lsb_index(bb);
+      q_moves = get_queen_attacks(sq, sides_occupancies[both]);
+      q_count += count_bits(q_moves);
+      pop_bit(bb, sq);
+  }
+  score -= (q_count - mobility_bonus_offset[3]) * mobility_bonus_weight[3];
+
+
+  // 3. Pawn Structure (Passed, Isolated)
   U64 pawn_bb = bitboards[wP];
-
   while (pawn_bb) {
-    square = get_lsb_index(pawn_bb);
-    int r = get_rank_index(square);
-    int f = get_file(square);
-
-    wP_file_count[f]++;
-
-    // Passed Pawn
-    if (!(passed_pawns_mask[white][square] & bitboards[bP])) {
-      int bonus = passed_pawn_bonus[r];
-      score += bonus;
-    }
-
-    // Isolated Pawn
-    if (!(isolated_pawns_mask[square] & bitboards[wP])) {
-      score += isolated_pawn_penalty;
-    }
-
-    // Material + PST for white pawns
-    mg_score += mg_pst[wP][square] + material_score[wP];
-    eg_score += eg_pst[wP][square] + material_score[wP];
-
-    pop_bit(pawn_bb, square);
+    int sq = get_lsb_index(pawn_bb);
+    // Passed
+    if (!(passed_pawns_mask[white][sq] & bitboards[bP]))
+        score += passed_pawn_bonus[get_rank_index(sq)];
+    // Isolated
+    if (!(isolated_pawns_mask[sq] & bitboards[wP]))
+        score += isolated_pawn_penalty;
+    pop_bit(pawn_bb, sq);
   }
 
   pawn_bb = bitboards[bP];
-
   while (pawn_bb) {
-    square = get_lsb_index(pawn_bb);
-    int r = get_rank_index(square);
-    int f = get_file(square);
-
-    bP_file_count[f]++;
-
-    // Passed Pawn
-    if (!(passed_pawns_mask[black][square] & bitboards[wP])) {
-      int bonus = passed_pawn_bonus[7 - r];
-      score -= bonus;
-    }
-
-    // Isolated Pawn
-    if (!(isolated_pawns_mask[square] & bitboards[bP])) {
-      score -= isolated_pawn_penalty;
-    }
-
-    // Material + PST for black pawns
-    mg_score += mg_pst[bP][square] + material_score[bP];
-    eg_score += eg_pst[bP][square] + material_score[bP];
-
-    pop_bit(pawn_bb, square);
+    int sq = get_lsb_index(pawn_bb);
+    // Passed (Black moves down, index increases, passed_pawn_bonus index needs flip)
+    if (!(passed_pawns_mask[black][sq] & bitboards[wP]))
+        score -= passed_pawn_bonus[7 - get_rank_index(sq)];
+    // Isolated
+    if (!(isolated_pawns_mask[sq] & bitboards[bP]))
+        score -= isolated_pawn_penalty;
+    pop_bit(pawn_bb, sq);
   }
 
-  // Doubled Pawns penalty
-  for (int i = 0; i < 8; i++) {
-    if (wP_file_count[i] > 1) {
-      int p = double_pawn_penalty * (wP_file_count[i] - 1);
-      score += p;
-    }
+  // 4. King Safety
+  // White King
+  int wk_sq = get_lsb_index(bitboards[wK]);
+  // Penalty for open file near king
+  if (!(pawns_file_mask[wk_sq] & bitboards[wP])) mg_score -= UnShieldedKingPenalty;
+  // Crude check for rank in front
+  else if (!(pawns_file_mask[wk_sq] & (bitboards[wP] >> 8))) mg_score -= SemiShieldedKingPenalty;
 
-    if (bP_file_count[i] > 1) {
-      int p = double_pawn_penalty * (bP_file_count[i] - 1);
-      score -= p;
-    }
-  }
+  // Black King
+  int bk_sq = get_lsb_index(bitboards[bK]);
+  if (!(pawns_file_mask[bk_sq] & bitboards[bP])) mg_score += UnShieldedKingPenalty;
+  else if (!(pawns_file_mask[bk_sq] & (bitboards[bP] << 8))) mg_score += SemiShieldedKingPenalty;
 
-  // ==================================================================
-  // 4. ROOK EVALUATION (Open/Semi-open files + Material + PST)
-  // ==================================================================
-  U64 of_bb = bitboards[wR];
-  while(of_bb) {
-    square = get_lsb_index(of_bb);
+  // Final Phase Blending
+  int final_score = ( (mg_score * phase) + (eg_score * (256 - phase)) ) / 256;
 
-    // Open file bonus
-    if (((bitboards[wP] | bitboards[bP]) & pawns_file_mask[square]) == 0) {
-      score += RookOpenFileBonus;
-    }
-    // Semi-open file bonus
-    else if ((bitboards[wP] & pawns_file_mask[square]) == 0) {
-      score += RookSemiOpenFileBonus;
-    }
+  // Add mobility and structure
+  final_score += score;
 
-    mg_score += mg_pst[wR][square] + material_score[wR];
-    eg_score += eg_pst[wR][square] + material_score[wR];
+  // Add Tempo (Side to move gets a small bonus)
+  final_score += (side_to_move == white) ? tempo_bonus : -tempo_bonus;
 
-    pop_bit(of_bb, square);
-  }
-
-  of_bb = bitboards[bR];
-  while(of_bb) {
-    square = get_lsb_index(of_bb);
-
-    // Open file bonus
-    if (((bitboards[wP] | bitboards[bP]) & pawns_file_mask[square]) == 0) {
-      score -= RookOpenFileBonus;
-    }
-    // Semi-open file bonus
-    else if ((bitboards[bP] & pawns_file_mask[square]) == 0) {
-      score -= RookSemiOpenFileBonus;
-    }
-
-    mg_score += mg_pst[bR][square] + material_score[bR];
-    eg_score += eg_pst[bR][square] + material_score[bR];
-
-    pop_bit(of_bb, square);
-  }
-
-  // ==================================================================
-  // 5. KING SAFETY + Material + PST
-  // ==================================================================
-  of_bb = bitboards[wK];
-  while(of_bb) {
-    square = get_lsb_index(of_bb);
-
-    // Unshielded king penalty (open file in front of king)
-    if (((bitboards[wP] | bitboards[bP]) & pawns_file_mask[square]) == 0) {
-      mg_score -= UnShieldedKingPenalty;
-    }
-    // Semi-shielded (no friendly pawn on king's file)
-    else if ((bitboards[wP] & pawns_file_mask[square]) == 0) {
-      mg_score -= SemiShieldedKingPenalty;
-    }
-
-    mg_score += mg_pst[wK][square] + material_score[wK];
-    eg_score += eg_pst[wK][square] + material_score[wK];
-
-    // Pawn shield bonus
-    mg_score += count_bits(king_attacks[square] & bitboards[wP]) * KingShieldBonus;
-
-    // Mobile king penalty (exposed king)
-    int king_mobile_sqs = count_bits(get_queen_attacks(square, sides_occupancies[both]));
-    mg_score -= king_mobile_sqs;
-
-    eg_score += king_mobile_sqs; // mobile king bonus in endgame
-
-    pop_bit(of_bb, square);
-  }
-
-  of_bb = bitboards[bK];
-  while(of_bb) {
-    square = get_lsb_index(of_bb);
-
-    // Unshielded king penalty
-    if (((bitboards[wP] | bitboards[bP]) & pawns_file_mask[square]) == 0) {
-      mg_score += UnShieldedKingPenalty;
-    }
-    // Semi-shielded
-    else if ((bitboards[bP] & pawns_file_mask[square]) == 0) {
-      mg_score += SemiShieldedKingPenalty;
-    }
-
-    mg_score += mg_pst[bK][square] + material_score[bK];
-    eg_score += eg_pst[bK][square] + material_score[bK];
-
-    // Pawn shield bonus
-    score -= count_bits(king_attacks[square] & bitboards[bP]) * KingShieldBonus;
-
-    // Mobile king penalty
-    int king_mobile_sqs = count_bits(get_queen_attacks(square, sides_occupancies[both]));
-    mg_score += king_mobile_sqs;
-
-    eg_score -= king_mobile_sqs; // mobile king endg bonus
-
-    pop_bit(of_bb, square);
-  }
-
-  // ==================================================================
-  // 6. BISHOP MOBILITY + Material + PST
-  // ==================================================================
-  U64 mob_bb = bitboards[wB];
-  while(mob_bb) {
-    square = get_lsb_index(mob_bb);
-
-    mg_score += mg_pst[wB][square] + material_score[wB];
-    eg_score += eg_pst[wB][square] + material_score[wB];
-
-    // Mobility bonus
-    score += count_bits(get_bishop_attacks(square, sides_occupancies[both]));
-
-    pop_bit(mob_bb, square);
-  }
-
-  mob_bb = bitboards[bB];
-  while(mob_bb) {
-    square = get_lsb_index(mob_bb);
-
-    mg_score += mg_pst[bB][square] + material_score[bB];
-    eg_score += eg_pst[bB][square] + material_score[bB];
-
-    // Mobility bonus
-    score -= count_bits(get_bishop_attacks(square, sides_occupancies[both]));
-
-    pop_bit(mob_bb, square);
-  }
-
-  // ==================================================================
-  // 7. QUEEN MOBILITY + Material + PST
-  // ==================================================================
-  mob_bb = bitboards[wQ];
-  while(mob_bb) {
-    square = get_lsb_index(mob_bb);
-
-    mg_score += mg_pst[wQ][square] + material_score[wQ];
-    eg_score += eg_pst[wQ][square] + material_score[wQ];
-
-    // Mobility bonus
-    score += count_bits(get_queen_attacks(square, sides_occupancies[both]));
-
-    pop_bit(mob_bb, square);
-  }
-
-  mob_bb = bitboards[bQ];
-  while(mob_bb) {
-    square = get_lsb_index(mob_bb);
-
-    mg_score += mg_pst[bQ][square] + material_score[bQ];
-    eg_score += eg_pst[bQ][square] + material_score[bQ];
-
-    // Mobility bonus
-    score -= count_bits(get_queen_attacks(square, sides_occupancies[both]));
-
-    pop_bit(mob_bb, square);
-  }
-
-  // ==================================================================
-  // 8. RETURN SCORE FROM SIDE-TO-MOVE PERSPECTIVE
-  // ==================================================================
-  score += ( (mg_score * phase) + (eg_score * (256 - phase)) ) / 256; // blend pst
-  return ( (side_to_move == white) ? score : -score );
+  return (side_to_move == white) ? final_score : -final_score;
 }
 
 
