@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://private-user-images.githubusercontent.com/131138888/356844742-f43bb227-cb3c-4249-ad9b-49b121f9b383.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjQwMjY2ODIsIm5iZiI6MTc2NDAyNjM4MiwicGF0aCI6Ii8xMzExMzg4ODgvMzU2ODQ0NzQyLWY0M2JiMjI3LWNiM2MtNDI0OS1hZDliLTQ5YjEyMWY5YjM4My5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjUxMTI0JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI1MTEyNFQyMzE5NDJaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1mMjFmZTQ1NTdkOTE5ZmQ5MmM3MTNmYWM5OGM0ODFmZmQwMDhmZjk0NGRkNDRmMGZhYTA1MjdjM2U0OGY5YzEyJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.uv7pTETXSlARbMSTW6P7BIXApS5IRvG0Fy_x2xP3zaw" width="240" alt="Echo logo">
+<img src="https://github.com/user-attachments/assets/0c6d308f-def4-4b25-adae-9cb41cf868d5" width="240" alt="Echo logo">
 </p>
 
 <h1 align="center"><b>E C H O — A Bitboard Chess Engine</b></h1>
-<p align="center"><sub>~2200 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
+<p align="center"><sub>~2230 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
 
 <p align="center">
   <img alt="language" src="https://img.shields.io/badge/language-C-blue">
@@ -14,8 +14,7 @@
 
 # Introduction
 
-Echo is a compact C bitboard chess engine focused on clarity, performance, and a classical alpha–beta search architecture. This README documents the engine's search, evaluation, pruning techniques, and UCI interface.
-
+Echo is a compact C bitboard chess engine focused on performance, and a classical alpha–beta search architecture.
 # Key Concepts
 
 - Zobrist hashing  
@@ -28,7 +27,10 @@ Echo is a compact C bitboard chess engine focused on clarity, performance, and a
 - Search extensions  
 - Killer & history heuristics  
 - Iterative deepening  
-- Move ordering (TT, PV, captures, killers, history)  
+- Move ordering (TT, PV, captures, killers, history)
+- Pawn structure evaluation
+- King safety
+- piece mobility
 - Aspiration windows  
 - Threefold repetition detection  
 - UCI protocol support
@@ -105,19 +107,6 @@ Outputs standard `info` lines and `bestmove`.
 | Evaluation           | `eval()`                            |
 | UCI                  | `parse_position`, `parse_go`        |
 
-# Search Flow (compact)
-
-```
-search_position
-  └─ Iterative Deepening
-      └─ Negamax
-          ├─ Move Ordering (TT → PV → Captures → Killers → History)
-          ├─ Alpha–Beta / PVS
-          ├─ LMR
-          ├─ Null Move Pruning
-          └─ Quiescence
-```
-
 # Debug & Dev Tools
 
 * `print_board()` — ASCII/Unicode board
@@ -127,9 +116,9 @@ search_position
 
 # Credits
 
-Echo was built using insights & inspiration from: 
-* <b>Maksim Korzh (Code Monkey King)</b>: His engine series (BBC) and explanations were definitely foundational.
-* <b>Sebastian Lague</b>: His chess-AI educational videos and source code influenced search architecture.
+Echo was built on the shoulders of these giants:
+* <b>Maksim Korzh (Code Monkey King)</b>: His engine series (BBC) was extremely useful.
+* <b>Sebastian Lague</b>: His chess-AI educational videos and source code influenced search architecture (very entertaining).
 * <b>BluefeverSoftware (VICE engine)</b> The VICE series provided practical, production-grade patterns for UCI + search structure.
 
 A huge thanks to all three — their contributions shaped the modern hobbyist chess-engine community.
