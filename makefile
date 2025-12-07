@@ -1,5 +1,5 @@
 gcc_warning_flags = -Wunused-variable -Wshadow -Wconversion -Wuninitialized -Wfloat-equal
-gcc_optimization_flags = -oFast -O3 -march=native -mtune=native -funroll-loops -finline-functions -fomit-frame-pointer -fprefetch-loop-arrays -ffast-math
+gcc_optimization_flags = -oFast -O3 -march=native -mtune=native -funroll-loops -finline-functions -flto -fomit-frame-pointer -fprefetch-loop-arrays -ffast-math
 release_gcc = gcc $(gcc_warning_flags) $(gcc_optimization_flags) src/echo.c -o bin/echo
 normal_gcc = gcc $(gcc_warning_flags) src/echo.c -o bin/echo
 
