@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # File to monitor
-FILE_TO_WATCH="./src/echo.c"
+FILE_TO_WATCH="./src/eval.c"
 
 # Compilation and execution settings
 GCC_WARNING_FLAGS="-Wunused-variable -Wshadow -Wconversion -Wuninitialized -Wfloat-equal"
