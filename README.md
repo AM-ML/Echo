@@ -14,28 +14,36 @@
 
 # Introduction
 
-Echo is a compact C bitboard chess engine focused on performance, and a classical alpha–beta search architecture.
+Echo is a compact C bitboard chess engine focused on performance, and a classical alpha–beta search architecture. It is the physical embodiment of my enthusiasm for chess programming as it evolves over the weeks.
 # Key Concepts
 
-- Zobrist hashing  
-- Transposition table (TT)  
-- Negamax + alpha–beta pruning  
-- Principal Variation Search (PVS)
-- PST Interpolation
-- Futility & Reverse Futility Pruning
-- Null move pruning  
-- Quiescence search  
-- Late Move Reductions (LMR)  
-- Search extensions  
-- Killer & history heuristics  
-- Iterative deepening  
-- Move ordering (TT, PV, captures, killers, history)
-- Pawn structure evaluation
-- King safety
-- piece mobility
-- Aspiration windows  
-- Threefold repetition detection  
 - UCI protocol support
+
+### Search
+- Quiescence search  
+- Negamax (MiniMax) Search
+- Principal Variation Search
+- Killer & history heuristics  
+- Null move pruning  
+- alpha–beta pruning 
+- Futility Pruning
+- Reverse Futility Pruning
+- Search extensions  
+- Late Move Reductions
+- Zobrist hashing 
+- Transposition Table
+- Aspiration windows 
+- Iterative deepening
+- Threefold repetition detection  
+- Move ordering (TT, PV, captures, killers, history)
+
+### Evaluation: 
+- Piece Mobility
+- Knight Outpost Bonus
+- Piece-Square Table Interpolation
+- Rook Activity (Open Files, 7th Rank, Battery Bonus)
+- Pawn structure evaluation (Passed Pawns, Connected Passers, Doubled Pawns, Isolated Pawns)
+- King safety (chebyshev distance-2 King Zone Inflitration Evaluation, Pawn shield, Battery Detection)
 
 # Project Structure
 
