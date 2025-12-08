@@ -3124,6 +3124,38 @@ static inline int evaluateRookActivity(int phase) {
   return score;
 }
 
+// Manhattan distance between two squares
+static inline int manhattan_distance(int sq1, int sq2) {
+    int file1 = get_file(sq1);
+    int rank1 = get_rank_index(sq1);
+    int file2 = get_file(sq2);
+    int rank2 = get_rank_index(sq2);
+    return abs(rank2 - rank1) + abs(file2 - file1);
+}
+
+// Mop-up evaluation:
+// Encourages driving the enemy king to the edge (Center Manhattan Distance)
+// and bringing our own king closer (Manhattan Distance).
+static inline int mopUpEval(int winning_side, int losing_side) {
+    int winning_king_sq = get_lsb_index(bitboards[winning_side == white ? wK : bK]);
+    int losing_king_sq = get_lsb_index(bitboards[losing_side == white ? wK : bK]);
+
+    int score = 0;
+
+    // Center Manhattan Distance (CMD) of losing King
+    // cmd_score[] gives ~200 bonus for edges and 0 for center.
+    // This perfectly matches the goal of pushing King to the edge.
+    score += cmd_score[losing_king_sq];
+
+    // Manhattan Distance (MD) between Kings
+    // We want to minimize distance. Max MD is ~14.
+    // Formula: (14 - dist) * Weight.
+    int md = manhattan_distance(winning_king_sq, losing_king_sq);
+    score += (14 - md) * 10; // max score = 130
+
+    return score;
+}
+
 static inline int eval() {
   int mg_score = 0;
   int eg_score = 0;
@@ -3150,7 +3182,9 @@ static inline int eval() {
   score += evaluatePawnStructure(phase);
 
   // King Safety & Rook Activation (Only in Middlegame)
-  if (phase > 100) {
+  // phase > 50 is a clever cut-off to save speed
+  // but yields some risk.
+  if (phase > 50) {
     mg_score += evaluateKingSafety(phase);
     mg_score += evaluateRookActivity(phase);
   }
@@ -3233,13 +3267,23 @@ static inline int eval() {
     pop_bit(b_knights, sq);
   }
 
-  // Final Tapered Evaluation
-  int final_score = ((mg_score * phase) + (eg_score * (256 - phase))) / 256; // interpolation
+  // interpolation
+  int final_score = ((mg_score * phase) + (eg_score * (256 - phase))) / 256;
   final_score += score; // general non-phase specific eval
+
+  // Mop Up Evaluation (for K+Q / K+R vs. K checkmates)
+  if (phase < 50) { // deep into the endgame
+    if (final_score > 200) {
+      final_score += mopUpEval(white, black);
+    } else if (final_score < -200) {
+      final_score -= mopUpEval(black, white);
+    }
+  }
+
+
   //  makes the engine prefer moves that dont lose tempo
   //  e.g. advancing a pawn for free by attacking a queen
   final_score += (side_to_move == white) ? tempo_bonus : -tempo_bonus;
-
   return (side_to_move == white) ? final_score : -final_score;
 }
 
@@ -4001,5 +4045,5 @@ int main(void) {
 
   free(TranspositionTable);
   return 0;
-}
 
+}
