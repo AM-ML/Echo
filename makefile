@@ -98,3 +98,5 @@ math:
 	echo "\033[1;94m----\033[1;96mRuntime: \033[1;93m$${runtime_ms2}ms\033[0;0m..."; \
 	echo "-------------------------"
 
+update:
+		cp "src/" "/mnt/c/Users/Suzy M. Najdy/Desktop/echo/" -rf

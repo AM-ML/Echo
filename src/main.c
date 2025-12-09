@@ -50,7 +50,6 @@ int main(void) {
   parse_fen(start_position);
   uci_loop();
 
-  free(TranspositionTable);
   return 0;
 
 }

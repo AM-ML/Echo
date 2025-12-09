@@ -27,9 +27,6 @@ const int QueenSideShieldedBonus = 15; // bonus for 3 front pawns defending quee
 const int passed_pawn_bonus[8] = { 0, 5, 10, 20, 35, 60, 100, 200 };
 
 
-
-
-
 // ---------------------------
 // --- PIECE SQUARE TABLES ---
 // ---------------------------
@@ -186,27 +183,43 @@ void init_black_pst() {
 
 // Material scores are now mostly embedded in PST, but base values help helper functions
 // These are PeSTO base material values
-int material_score[12] = {
-       82, // wP
-      337, // wN
-      365, // wB
-      477, // wR
-     1025, // wQ
-    12000, // wK
-      -82, // bP
-     -337, // bN
-     -365, // bB
-     -477, // bR
-    -1025, // bQ
-    -12000 // bK
+int material_score_mg[12] = {
+       90, // wP
+      547, // wN
+      578, // wB
+      893, // wR
+     1777, // wQ
+    16000, // wK
+      -90, // bP
+     -547, // bN
+     -578, // bB
+     -893, // bR
+    -1777, // bQ
+   -16000  // bK
+};
+
+// The inflation of values makes the engine prefer material over positional advantage in the endgame
+int material_score_eg[12] = {
+      149, // wP
+      598, // wN
+      641, // wB
+      966, // wR
+     1878, // wQ
+    16000, // wK
+     -149, // bP
+     -598, // bN
+     -641, // bB
+     -966, // bR
+    -1878, // bQ
+   -16000  // bK
 };
 
 // note that this adds the material score directly into the PST (i assume its faster??)
 void init_evaluation() {
   for (int piece = wP; piece <= bK; piece++) {
     for (int sq = 0; sq < 64; sq++) {
-      mg_pst[piece][sq] += material_score[piece];
-      eg_pst[piece][sq] += material_score[piece];
+      mg_pst[piece][sq] += material_score_mg[piece];
+      eg_pst[piece][sq] += material_score_eg[piece];
     }
   }
 }
@@ -452,7 +465,7 @@ static inline int evaluateKingSafety(int phase) {
 
     // Pawn storm check
     U64 storm = (1ULL << RF_2SQ(1, 5)) | (1ULL << RF_2SQ(1, 6)) | (1ULL << RF_2SQ(1, 7));
-    safety_score += (3 - count_bits(b_pawns & storm)) * PawnStormPenalty;
+    safety_score -= (3 - count_bits(b_pawns & storm)) * PawnStormPenalty;
 
   } else if (w_is_queenside) {
     U64 shield = (1ULL << RF_2SQ(6, 0)) | (1ULL << RF_2SQ(6, 1)) | (1ULL << RF_2SQ(6, 2));

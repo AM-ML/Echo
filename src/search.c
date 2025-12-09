@@ -184,7 +184,7 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
         }
       }
 
-      if (eval_score + ABS(material_score[target_piece]) + 200 < alpha) continue;
+      if (eval_score + ABS(material_score_mg[target_piece]) + 200 < alpha) continue;
     }
 
     COPY_BOARD();

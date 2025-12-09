@@ -21,7 +21,8 @@
 extern int mg_pst[12][64];
 extern int eg_pst[12][64];
 
-extern int material_score[12];
+extern int material_score_mg[12];
+extern int material_score_eg[12];
 extern int mvv_lva[12][12];
 
 extern int piecePhaseWeights[12];

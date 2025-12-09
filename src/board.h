@@ -60,7 +60,7 @@ extern int decode_ascii_pieces[];
 #define U64 unsigned long long
 
 // rank and file to square
-#define RF_2SQ(r, f) (r * 8 + f)
+#define RF_2SQ(r, f) ((r) * 8 + (f))
 
 extern U64 bitboards[];        // pieces bbs
 extern U64 sides_occupancies[]; // sides
