@@ -210,12 +210,11 @@ void parse_go(char *command)
 {
     // init parameters
     int depth = -1;
+    timeset = 0;
 
     // init argument
     char *argument = NULL;
 
-    // infinite search
-    if ((argument = strstr(command,"infinite"))) {}
 
     // match UCI "binc" command
     if ((argument = strstr(command,"binc")) && side_to_move == black)
@@ -288,6 +287,11 @@ void parse_go(char *command)
     if(depth == -1)
         // set depth to 64 plies (takes ages to complete...)
         depth = 64;
+
+    // infinite search
+    if ((argument = strstr(command,"infinite"))) {
+      timeset = 0;
+    }
 
     // print debug info
     printf("time:%d start:%d stop:%d depth:%d timeset:%d\n",

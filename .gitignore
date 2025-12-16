@@ -4,6 +4,7 @@ ftest
 truth
 test
 echo
+echo_prev
 *.exe
 *.pyc
 test.py

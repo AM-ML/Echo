@@ -6,6 +6,7 @@ normal_gcc = gcc $(gcc_warning_flags) src/*.c -o bin/echo
 default_linux:
 	clear;
 	@start=`date +%s%N`; \
+	mv bin/echo bin/echo_prev; \
 	${normal_gcc}; \
 	end=`date +%s%N`; \
 	runtime=$$((end - start)); \
@@ -24,6 +25,7 @@ default_linux:
 rel:
 	clear;
 	@start=`date +%s%N`; \
+	mv bin/echo bin/echo_prev; \
 	${release_gcc}; \
 	end=`date +%s%N`; \
 	runtime=$$((end - start)); \

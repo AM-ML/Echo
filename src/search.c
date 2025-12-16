@@ -403,6 +403,13 @@ static inline int negamax(int alpha, int beta, int depth) {
 void search_position(int depth) {
   ply = 0;
   nodes = 0;
+  time = -1;
+
+  U64 prev_nodes = 0;
+  int last_score = 0; // for aspiration window
+  int alpha, beta;
+  int delta = 250;
+
   stopped = 0;
   memset(killer_moves, 0, sizeof(killer_moves));
   memset(history_moves, 0, sizeof(history_moves));
@@ -410,28 +417,62 @@ void search_position(int depth) {
   memset(pv_length, 0, sizeof(pv_length));
 
   int best_move = 0;
+  int delta_tms = 0;
+  U64 nps = 0;
+
+  // normally u choose depth of 1
+  // but my inflated material score means
+  // aspiration windows will fail at these lower depths more often
+  if (depth <= 3) {
+    alpha = -INF;
+    beta = INF;
+  } else {
+    alpha = last_score - delta;
+    beta = last_score + delta;
+  }
 
   for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
     if (stopped == 1) break;
 
-    // Use a small window for search, but fall back to full window if it fails
+    prev_nodes = nodes;
+
     // For simplicity and stability, we use full window here
-    int score = negamax(NEG_INF, INF, cur_depth);
+    int score = negamax(alpha, beta, cur_depth);
 
     if (stopped == 1) break;
 
+    if (score <= alpha) {
+      alpha -= delta;
+      delta *=2;
+    } else if (score >= beta) {
+      beta += delta;
+      delta *= 2;
+    }
+
+    if (delta > 2000) {
+      alpha = -INF;
+      beta = INF;
+    }
+
+    last_score = score;
+
     if (pv_length[0] > 0) best_move = pv_table[0][0];
+
+    delta_tms = get_time_ms() - starttime;
+    if (delta_tms)
+      nps = (nodes - prev_nodes) / delta_tms * 1000;
 
     printf("info depth %d score ", cur_depth);
     if (score > MATE_SCORE)      printf("mate %d ", (MATE_VALUE - score + 1) / 2);
     else if (score < -MATE_SCORE) printf("mate %d ", -(score + MATE_VALUE) / 2);
     else                          printf("cp %d ", score);
 
-    printf("nodes %llu pv ", nodes);
+    printf("time %d nodes %llu nps %llu pv ", delta_tms, nodes, nps);
     for (int i = 0; i < pv_length[0]; i++) {
       printf("%s ", get_move_str(pv_table[0][i]));
     }
     printf("\n");
+
   }
 
   printf("bestmove ");
