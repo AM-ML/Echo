@@ -209,6 +209,7 @@ void parse_fen(char *fen);
 extern int quit;
 extern int movestogo;
 extern int movetime;
+extern int nodelimit;
 extern int time;
 extern int inc;
 extern int starttime;
@@ -225,5 +226,8 @@ extern int ply;  // half-move counter
 
 extern int killer_moves[2][MAX_PLY]; // [side][ply]
 extern int history_moves[12][64]; // [piece][square]
+
+extern int ponder_move;
+extern int pondering;
 
 #endif

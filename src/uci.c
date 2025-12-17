@@ -96,10 +96,13 @@ void read_input()
 // a bridge function to interact between search and GUI input
 void communicate() {
 	// if time is up break here
-    if(timeset == 1 && get_time_ms() > stoptime) {
+  if(timeset == 1 && get_time_ms() > stoptime) {
 		// tell engine to stop calculating
 		stopped = 1;
-	}
+  }
+
+  if (nodelimit && nodes > nodelimit)
+    stopped = 1;
 
     // read GUI input
 	read_input();
@@ -211,6 +214,7 @@ void parse_go(char *command)
     // init parameters
     int depth = -1;
     timeset = 0;
+    nodelimit = 0;
 
     // init argument
     char *argument = NULL;
@@ -250,6 +254,9 @@ void parse_go(char *command)
     if ((argument = strstr(command,"depth")))
         // parse search depth
         depth = atoi(argument + 6);
+
+    if ((argument = strstr(command, "nodes")))
+      nodelimit = atoi(argument + 6);
 
     // if move time is not available
     if(movetime != -1)
@@ -301,6 +308,11 @@ void parse_go(char *command)
     search_position(depth);
 }
 
+void parse_uci_ponderhit() {
+  pondering = 0;
+  stopped = 0;
+}
+
 
 void uci_loop() {
   // clear buffer
@@ -336,7 +348,6 @@ void uci_loop() {
       parse_uci_makemoves(input);
       continue;
     }
-
     if (strncmp(input, "ucinewgame", 10) == 0) {
       parse_position("position startpos"); clear_tt();
       continue;
@@ -360,6 +371,14 @@ void uci_loop() {
 
     if (strncmp(input, "print", 5) == 0) {
       print_board(1); continue;
+    }
+    if (strncmp(input, "ponderhit", 9) == 0) {
+      parse_uci_ponderhit();
+      continue;
+    }
+    if (strncmp(input, "ponder", 6) == 0) {
+      pondering = 1;
+      timeset = 0;
     }
   }
 }

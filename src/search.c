@@ -11,6 +11,12 @@ int get_time_ms() {
 }
 
 U64 nodes;
+int seldepth = 0;
+
+// info output stuff
+int root_moves_searched;
+int root_move_count;
+int currmove;
 
 static inline void perft_driver(int depth) {
   if (depth == 0) {
@@ -149,9 +155,14 @@ static inline void sort_moves(Moves *ml, int tt_move) {
   }
 }
 
+int orig_depth = 0; // for currmove output
+int curnt_odepth = 0; // for currmove output
+
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
   if ((nodes & 2047) == 0) communicate();
   nodes++;
+
+  if (ply > seldepth) seldepth = ply;
 
   int eval_score = eval();
 
@@ -214,6 +225,9 @@ static inline int negamax(int alpha, int beta, int depth) {
   // 1. PV Node Initialization
   pv_length[ply] = ply;
   int pv_node = (beta - alpha) > 1;
+
+  if (ply > seldepth) seldepth = ply;
+
 
   // 2. Base Cases
   if (ply && is_repetition()) return 0;
@@ -303,6 +317,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
   Moves ml;
   generate_moves(&ml);
+  int is_root = (ply == 0);
 
   // Sort moves using the TT move
   sort_moves(&ml, tt_move);
@@ -313,6 +328,15 @@ static inline int negamax(int alpha, int beta, int depth) {
 
   for (int i = 0; i < ml.count; i++) {
     int move = ml.moves[i];
+
+    if (is_root) {
+      currmove = move;
+      root_moves_searched++;
+
+      if((nodes & 2048) == 0) {
+        printf("info depth %d currmove %s currmovenumber %d\n", curnt_odepth, get_move_str(currmove), root_moves_searched);
+      }
+    }
 
     // Pruning checks
     int is_capture = get_move_capture_flag(move);
@@ -404,6 +428,8 @@ void search_position(int depth) {
   ply = 0;
   nodes = 0;
   time = -1;
+  seldepth = 0;
+  orig_depth = depth; // for currmove output
 
   U64 prev_nodes = 0;
   int last_score = 0; // for aspiration window
@@ -417,6 +443,13 @@ void search_position(int depth) {
   memset(pv_length, 0, sizeof(pv_length));
 
   int best_move = 0;
+
+  Moves root_ml;
+  root_ml.count = 0;
+  generate_moves(&root_ml);
+
+  root_move_count = root_ml.count;
+
   int delta_tms = 0;
   U64 nps = 0;
 
@@ -432,9 +465,11 @@ void search_position(int depth) {
   }
 
   for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
-    if (stopped == 1) break;
-
+    root_moves_searched = 0;
     prev_nodes = nodes;
+    curnt_odepth = cur_depth;
+
+    if (stopped == 1) break;
 
     // For simplicity and stability, we use full window here
     int score = negamax(alpha, beta, cur_depth);
@@ -457,12 +492,13 @@ void search_position(int depth) {
     last_score = score;
 
     if (pv_length[0] > 0) best_move = pv_table[0][0];
+    if (pv_length[0] > 1) ponder_move = pv_table[0][1];
 
     delta_tms = get_time_ms() - starttime;
     if (delta_tms)
-      nps = (nodes - prev_nodes) / delta_tms * 1000;
+      nps = (nodes - prev_nodes) / (U64) delta_tms * 1000;
 
-    printf("info depth %d score ", cur_depth);
+    printf("info depth %d seldepth %d score ", cur_depth, seldepth);
     if (score > MATE_SCORE)      printf("mate %d ", (MATE_VALUE - score + 1) / 2);
     else if (score < -MATE_SCORE) printf("mate %d ", -(score + MATE_VALUE) / 2);
     else                          printf("cp %d ", score);
@@ -475,32 +511,37 @@ void search_position(int depth) {
 
   }
 
-  printf("bestmove ");
-  if (best_move) {
-    print_move(best_move);
-  }
-  else {
-    // FALLBACK: Find the first LEGAL move
-    Moves ml;
-    ml.count = 0;
-    generate_moves(&ml);
+  if (!pondering) {
+    printf("bestmove ");
+    if (best_move) {
+      printf("%s ", get_move_str(best_move));
+      if (ponder_move)
+        printf("ponder %s", get_move_str(ponder_move));
+      printf("\n");
+    }
+    else {
+      // FALLBACK: Find the first LEGAL move
+      Moves ml;
+      ml.count = 0;
+      generate_moves(&ml);
 
-    int found_legal = 0;
-    for (int i = 0; i < ml.count; i++) {
+      int found_legal = 0;
+      for (int i = 0; i < ml.count; i++) {
         COPY_BOARD();
         if (make_move(ml.moves[i], allow_all_moves)) {
-            print_move(ml.moves[i]);
-            found_legal = 1;
-            RESTORE_BOARD();
-            break;
+          print_move(ml.moves[i]);
+          found_legal = 1;
+          RESTORE_BOARD();
+          break;
         }
         RESTORE_BOARD();
-    }
+      }
 
-    if (!found_legal) {
+      if (!found_legal) {
         // Must be checkmate or stalemate, print null or resign?
         // UCI requires a move usually, but if we are mated, we can print (none)
         printf("(none)\n");
+      }
     }
   }
 }

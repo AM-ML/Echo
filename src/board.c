@@ -314,10 +314,13 @@ int starttime = 0;
 int stoptime = 0;
 int timeset = 0;
 int stopped = 0;
+int nodelimit = 0;
 
 int ply;  // half-move counter
 
 int killer_moves[2][MAX_PLY]; // [side][ply]
 int history_moves[12][64]; // [piece][square]
 
-
+// global variable for uci "ponderhit"
+int ponder_move = 0;
+int pondering = 0;
