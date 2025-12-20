@@ -350,7 +350,8 @@ static inline int negamax(int alpha, int beta, int depth) {
       currmove = move;
       root_moves_searched++;
 
-      if((nodes & 2048) == 0) {
+      if((nodes & 4194304) == 0) {
+        if (depth > 18)
         printf("info depth %d currmove %s currmovenumber %d\n", depth, get_move_str(currmove), root_moves_searched);
       }
     }
@@ -442,6 +443,7 @@ static inline int negamax(int alpha, int beta, int depth) {
 
 // Enhanced search with aspiration windows
 // Enhanced search with aspiration windows
+// Enhanced search with aspiration windows
 void search_position(int depth) {
   stopped = 0;
   global_nodes = 0;
@@ -449,12 +451,13 @@ void search_position(int depth) {
   int last_score = 0;
   starttime = get_time_ms();
 
-  // Disable Multithreading on Windows
-#ifndef _WIN32
+  // CHANGE 1: Disable Multithreading on Windows
+  // We use a simple #ifndef check. If _WIN32 is defined, we run simply without the pragma.
+  #ifndef _WIN32
   #pragma omp parallel copyin(bitboards, sides_occupancies, piece_on_squares, \
                               side_to_move, can_castle, en_passant, hash_key, \
                               repetition_table, repetition_index)
-#endif
+  #endif
   {
     int thread_id = omp_get_thread_num();
 
@@ -503,7 +506,7 @@ void search_position(int depth) {
         if (pv_length[0] > 0) best_move = pv_table[0][0];
 
         int delta_tms = get_time_ms() - starttime;
-        U64 nps = (delta_tms > 0) ? (global_nodes * 1000 / delta_tms) : 0;
+        U64 nps = (delta_tms > 0) ? (global_nodes * 1000 / (U64) delta_tms) : 0;
 
         printf("info depth %d seldepth %d score ", cur_depth, seldepth);
         if (score > MATE_SCORE) printf("mate %d ", (MATE_VALUE - score + 1) / 2);

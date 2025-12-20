@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <unistd.h>
 
-#if !defined(_WIN32)
+#if !(defined(_WIN32) || defined(_WIN64))
   #include <omp.h>
 #else
   // Define dummy macros/vars for Windows single-threaded fallback
