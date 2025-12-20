@@ -8,6 +8,7 @@
 
 extern U64 hash_key;
 
+#pragma omp threadprivate(hash_key)
 
 // ---------------------------
 // ----- ZOBRIST HASHING -----

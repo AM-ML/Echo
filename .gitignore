@@ -8,6 +8,9 @@ echo_prev
 *.exe
 *.pyc
 test.py
+bin/*
+src/merged
+src/quom
 
 # Prerequisites
 *.d

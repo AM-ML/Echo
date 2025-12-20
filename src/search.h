@@ -21,11 +21,17 @@
 int get_time_ms();
 extern U64 nodes;
 
+#pragma omp threadprivate(nodes)
+
+extern U64 global_nodes;
+
 static inline void perft_driver(int depth);
 void perft_test(int depth);
 
 extern int pv_length[MAX_PLY];
 extern int pv_table[MAX_PLY][MAX_PLY];
+
+#pragma omp threadprivate(pv_length, pv_table)
 
 extern int apply_pv, pv_score;
 

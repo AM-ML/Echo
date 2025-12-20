@@ -18,6 +18,10 @@ int root_moves_searched;
 int root_move_count;
 int currmove;
 
+#pragma omp threadprivate(nodes, root_moves_searched, currmove)
+
+U64 global_nodes;
+
 static inline void perft_driver(int depth) {
   if (depth == 0) {
     nodes++;
@@ -87,6 +91,8 @@ void perft_test(int depth) {
 
 int pv_length[MAX_PLY];
 int pv_table[MAX_PLY][MAX_PLY];
+
+#pragma omp threadprivate(pv_length, pv_table)
 
 int apply_pv, pv_score;
 
@@ -159,7 +165,13 @@ int orig_depth = 0; // for currmove output
 int curnt_odepth = 0; // for currmove output
 
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
-  if ((nodes & 2047) == 0) communicate();
+  if ((nodes & 2047) == 0) {
+    #pragma omp atomic update
+    global_nodes += 2048;
+
+    communicate();
+  }
+
   nodes++;
 
   if (ply > seldepth) seldepth = ply;
@@ -245,7 +257,12 @@ static inline int negamax(int alpha, int beta, int depth) {
     return quiescence_search(alpha, beta, 0);
   }
 
-  if ((nodes & 2047) == 0) communicate();
+  if ((nodes & 2047) == 0) {
+    #pragma omp atomic update
+    global_nodes += 2048;
+
+    communicate();
+  }
   if (stopped) return 0;
 
   int hashf_flag = hashf_ALPHA;
@@ -334,7 +351,7 @@ static inline int negamax(int alpha, int beta, int depth) {
       root_moves_searched++;
 
       if((nodes & 2048) == 0) {
-        printf("info depth %d currmove %s currmovenumber %d\n", curnt_odepth, get_move_str(currmove), root_moves_searched);
+        printf("info depth %d currmove %s currmovenumber %d\n", depth, get_move_str(currmove), root_moves_searched);
       }
     }
 
@@ -424,125 +441,88 @@ static inline int negamax(int alpha, int beta, int depth) {
 }
 
 // Enhanced search with aspiration windows
+// Enhanced search with aspiration windows
 void search_position(int depth) {
-  ply = 0;
-  nodes = 0;
-  time = -1;
-  seldepth = 0;
-  orig_depth = depth; // for currmove output
-
-  U64 prev_nodes = 0;
-  int last_score = 0; // for aspiration window
-  int alpha, beta;
-  int delta = 250;
-
   stopped = 0;
-  memset(killer_moves, 0, sizeof(killer_moves));
-  memset(history_moves, 0, sizeof(history_moves));
-  memset(pv_table, 0, sizeof(pv_table));
-  memset(pv_length, 0, sizeof(pv_length));
-
+  global_nodes = 0;
   int best_move = 0;
+  int last_score = 0;
+  starttime = get_time_ms();
 
-  Moves root_ml;
-  root_ml.count = 0;
-  generate_moves(&root_ml);
+  // Disable Multithreading on Windows
+#ifndef _WIN32
+  #pragma omp parallel copyin(bitboards, sides_occupancies, piece_on_squares, \
+                              side_to_move, can_castle, en_passant, hash_key, \
+                              repetition_table, repetition_index)
+#endif
+  {
+    int thread_id = omp_get_thread_num();
 
-  root_move_count = root_ml.count;
+    // Thread-local search variables
+    nodes = 0;
+    ply = 0;
+    memset(killer_moves, 0, sizeof(killer_moves));
+    memset(history_moves, 0, sizeof(history_moves));
 
-  int delta_tms = 0;
-  U64 nps = 0;
+    // Iterative Deepening
+    for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
 
-  // normally u choose depth of 1
-  // but my inflated material score means
-  // aspiration windows will fail at these lower depths more often
-  if (depth <= 3) {
-    alpha = -INF;
-    beta = INF;
-  } else {
-    alpha = last_score - delta;
-    beta = last_score + delta;
-  }
+      if (stopped) break;
 
-  for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
-    root_moves_searched = 0;
-    prev_nodes = nodes;
-    curnt_odepth = cur_depth;
+      int score;
+      int alpha = -INF;
+      int beta = INF;
+      int delta = 50;
 
-    if (stopped == 1) break;
+      if (cur_depth >= 5) {
+        alpha = last_score - delta;
+        beta = last_score + delta;
+      }
 
-    // For simplicity and stability, we use full window here
-    int score = negamax(alpha, beta, cur_depth);
+      while (1) {
+        if (stopped) break;
+        score = negamax(alpha, beta, cur_depth);
 
-    if (stopped == 1) break;
-
-    if (score <= alpha) {
-      alpha -= delta;
-      delta *=2;
-    } else if (score >= beta) {
-      beta += delta;
-      delta *= 2;
-    }
-
-    if (delta > 2000) {
-      alpha = -INF;
-      beta = INF;
-    }
-
-    last_score = score;
-
-    if (pv_length[0] > 0) best_move = pv_table[0][0];
-    if (pv_length[0] > 1) ponder_move = pv_table[0][1];
-
-    delta_tms = get_time_ms() - starttime;
-    if (delta_tms)
-      nps = (nodes - prev_nodes) / (U64) delta_tms * 1000;
-
-    printf("info depth %d seldepth %d score ", cur_depth, seldepth);
-    if (score > MATE_SCORE)      printf("mate %d ", (MATE_VALUE - score + 1) / 2);
-    else if (score < -MATE_SCORE) printf("mate %d ", -(score + MATE_VALUE) / 2);
-    else                          printf("cp %d ", score);
-
-    printf("time %d nodes %llu nps %llu pv ", delta_tms, nodes, nps);
-    for (int i = 0; i < pv_length[0]; i++) {
-      printf("%s ", get_move_str(pv_table[0][i]));
-    }
-    printf("\n");
-
-  }
-
-  if (!pondering) {
-    printf("bestmove ");
-    if (best_move) {
-      printf("%s ", get_move_str(best_move));
-      if (ponder_move)
-        printf("ponder %s", get_move_str(ponder_move));
-      printf("\n");
-    }
-    else {
-      // FALLBACK: Find the first LEGAL move
-      Moves ml;
-      ml.count = 0;
-      generate_moves(&ml);
-
-      int found_legal = 0;
-      for (int i = 0; i < ml.count; i++) {
-        COPY_BOARD();
-        if (make_move(ml.moves[i], allow_all_moves)) {
-          print_move(ml.moves[i]);
-          found_legal = 1;
-          RESTORE_BOARD();
+        if (score <= alpha) {
+          alpha -= delta;
+          beta = (alpha + beta) / 2 + delta;
+        }
+        else if (score >= beta) {
+          beta += delta;
+        }
+        else {
           break;
         }
-        RESTORE_BOARD();
+        delta += delta / 2;
+        if (alpha < -MATE_VALUE) alpha = -INF;
+        if (beta > MATE_VALUE) beta = INF;
       }
 
-      if (!found_legal) {
-        // Must be checkmate or stalemate, print null or resign?
-        // UCI requires a move usually, but if we are mated, we can print (none)
-        printf("(none)\n");
+      if (thread_id == 0 && !stopped) {
+        last_score = score;
+        if (pv_length[0] > 0) best_move = pv_table[0][0];
+
+        int delta_tms = get_time_ms() - starttime;
+        U64 nps = (delta_tms > 0) ? (global_nodes * 1000 / delta_tms) : 0;
+
+        printf("info depth %d seldepth %d score ", cur_depth, seldepth);
+        if (score > MATE_SCORE) printf("mate %d ", (MATE_VALUE - score + 1) / 2);
+        else if (score < -MATE_SCORE) printf("mate %d ", -(score + MATE_VALUE) / 2);
+        else printf("cp %d ", score);
+
+        printf("nodes %llu nps %llu time %d pv ", global_nodes, nps, delta_tms);
+        for (int i = 0; i < pv_length[0]; i++) printf("%s ", get_move_str(pv_table[0][i]));
+        printf("\n");
+        fflush(stdout);
       }
     }
+  } // End of Parallel Region (or simple block on Windows)
+
+  if (!pondering) {
+    printf("bestmove %s", (best_move) ? get_move_str(best_move) : "0000");
+    if (ponder_move && best_move) printf(" ponder %s", get_move_str(ponder_move));
+    printf("\n");
+    fflush(stdout);
   }
 }
 

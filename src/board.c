@@ -23,6 +23,7 @@ int side_to_move = -1;
 int can_castle; // WCK WCQ BCQ BCK
 int en_passant = no_square;
 
+#pragma omp threadprivate(bitboards, sides_occupancies, piece_on_squares, side_to_move, can_castle, en_passant)
 
 const char *square_to_notation[] = {
     "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
@@ -73,6 +74,8 @@ const U64 rank_8 = 0x00000000000000FFULL;
 
 U64 repetition_table[REP_TABLE_SIZE];
 int repetition_index = 0;
+
+#pragma omp threadprivate(repetition_table, repetition_index)
 
 // position repetition detection
 int is_repetition()
@@ -320,6 +323,8 @@ int ply;  // half-move counter
 
 int killer_moves[2][MAX_PLY]; // [side][ply]
 int history_moves[12][64]; // [piece][square]
+
+#pragma omp threadprivate(ply, killer_moves, history_moves)
 
 // global variable for uci "ponderhit"
 int ponder_move = 0;

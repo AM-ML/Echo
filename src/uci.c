@@ -95,17 +95,13 @@ void read_input()
 
 // a bridge function to interact between search and GUI input
 void communicate() {
-	// if time is up break here
-  if(timeset == 1 && get_time_ms() > stoptime) {
-		// tell engine to stop calculating
-		stopped = 1;
+  // Only the master thread (thread 0) handles IO and Time Management
+  if (omp_get_thread_num() == 0) {
+    if(timeset == 1 && get_time_ms() > stoptime) {
+      stopped = 1;
+    }
+    read_input();
   }
-
-  if (nodelimit && nodes > nodelimit)
-    stopped = 1;
-
-    // read GUI input
-	read_input();
 }
 
 int parse_move(char *move_str) { // move_str: e2e4, e7e8q, etc.

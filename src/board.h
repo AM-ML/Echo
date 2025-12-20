@@ -9,6 +9,13 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#if !defined(_WIN32)
+  #include <omp.h>
+#else
+  // Define dummy macros/vars for Windows single-threaded fallback
+  static int omp_get_thread_num() { return 0; }
+#endif
+
 #ifdef _WIN32
 #define FORCE_ASCII 1
 #else
@@ -62,13 +69,15 @@ extern int decode_ascii_pieces[];
 // rank and file to square
 #define RF_2SQ(r, f) ((r) * 8 + (f))
 
-extern U64 bitboards[];        // pieces bbs
-extern U64 sides_occupancies[]; // sides
-extern int piece_on_squares[]; // mailbox structure: for faster move gen + make, -1 = empty
+extern U64 bitboards[12];        // pieces bbs
+extern U64 sides_occupancies[3]; // sides
+extern int piece_on_squares[64]; // mailbox structure: for faster move gen + make, -1 = empty
 
 extern int side_to_move;
 extern int can_castle; // WCK WCQ BCQ BCK
 extern int en_passant;
+
+#pragma omp threadprivate(bitboards, sides_occupancies, piece_on_squares, side_to_move, can_castle, en_passant)
 
 extern const char *square_to_notation[];
 int char_to_square(const char* square);
@@ -113,6 +122,8 @@ int get_lsb_index(U64 bitboard);
 #define REP_TABLE_SIZE 2048
 extern U64 repetition_table[REP_TABLE_SIZE];
 extern int repetition_index;
+
+#pragma omp threadprivate(repetition_table, repetition_index)
 
 // position repetition detection
 int is_repetition();
@@ -226,6 +237,8 @@ extern int ply;  // half-move counter
 
 extern int killer_moves[2][MAX_PLY]; // [side][ply]
 extern int history_moves[12][64]; // [piece][square]
+
+#pragma omp threadprivate(ply, killer_moves, history_moves)
 
 extern int ponder_move;
 extern int pondering;

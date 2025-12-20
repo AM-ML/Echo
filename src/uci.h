@@ -5,6 +5,7 @@
 
 #include "search.h"
 #include "helper.h"
+#include <omp.h>
 
 int input_waiting();
 
