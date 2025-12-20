@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center"><b>E C H O — A Bitboard Chess Engine</b></h1>
-<p align="center"><sub>~2600 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
+<p align="center"><sub>~2650 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
 
 <p align="center">
   <img alt="language" src="https://img.shields.io/badge/language-C-blue">
@@ -27,6 +27,7 @@ Echo is a compact C bitboard chess engine focused on performance and a classical
 - **Heuristics:** Killer Moves, History Heuristic, Late Move Reductions (LMR).
 - **Quiescence:** Specialized search to mitigate horizon effects.
 - **Optimization:** Transposition Table with Zobrist Hashing.
+- **Multi-threading:** Parallel Search using openmp library
 
 ### Evaluation
 - **Material & Position:** Piece-Square Tables (PST) with middlegame/endgame interpolation.
