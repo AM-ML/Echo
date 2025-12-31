@@ -14,7 +14,7 @@
 
 # Introduction
 
-Echo is a compact C bitboard chess engine focused on performance and a classical alpha–beta search architecture. What started as a single-file prototype has evolved into a modular, high-performance engine embodying a physical enthusiasm for chess programming.
+Echo is a bitboard chess engine focused on performance and a classical alpha–beta search architecture and evaluation. Chess programming is a rabbit hole that never ends...
 
 # Key Concepts
 
