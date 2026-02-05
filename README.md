@@ -96,7 +96,6 @@ isready
 ucinewgame
 position startpos | position fen <FEN>
 go depth <N> | go movetime <ms>
-bench
 stop
 quit
 ```
