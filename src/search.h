@@ -24,7 +24,9 @@ extern U64 nodes;
 #pragma omp threadprivate(nodes)
 
 extern U64 global_nodes;
+extern int lmr_table[64][64];
 
+void init_search();
 static inline void perft_driver(int depth);
 void perft_test(int depth);
 

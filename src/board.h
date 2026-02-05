@@ -9,12 +9,7 @@
 #include <stdint.h>
 #include <unistd.h>
 
-#if !(defined(_WIN32) || defined(_WIN64))
-  #include <omp.h>
-#else
-  // Define dummy macros/vars for Windows single-threaded fallback
-  static int omp_get_thread_num() { return 0; }
-#endif
+#include <omp.h>
 
 #ifdef _WIN32
 #define FORCE_ASCII 1
@@ -24,6 +19,9 @@
 
 #define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
 #define out(output) (printf(#output "\n"))
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 // FEN CONSTANTS
 #define empty_board "8/8/8/8/8/8/8/8 w - - "

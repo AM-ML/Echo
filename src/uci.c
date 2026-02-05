@@ -55,9 +55,6 @@ void read_input()
     // "listen" to STDIN
     if (input_waiting())
     {
-        // tell engine to stop calculating
-        stopped = 1;
-
         // loop to read bytes from STDIN
         do
         {
@@ -67,6 +64,8 @@ void read_input()
 
         // until bytes available
         while (bytes < 0);
+
+        if (bytes == 0) return; // EOF
 
         // searches for the first occurrence of '\n'
         endc = strchr(input,'\n');
@@ -82,12 +81,13 @@ void read_input()
             {
                 // tell engine to terminate exacution
                 quit = 1;
+                stopped = 1;
             }
 
             // // match UCI "stop" command
             else if (strncmp(input, "stop", 4) == 0)    {
                 // tell engine to terminate exacution
-                quit = 1;
+                stopped = 1;
             }
         }
     }
@@ -309,6 +309,41 @@ void parse_uci_ponderhit() {
   stopped = 0;
 }
 
+void run_bench() {
+    const char *fens[] = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+        "8/k7/3p4/p2P1p2/P2P1P2/8/8/K7 w - - 0 1",
+        "rnbq1rk1/pp2ppbp/3p1np1/2pP4/2P5/2N2NP1/PP2PPBP/R1BQK2R w KQ c6 0 7",
+        "r3k2r/2pb1ppp/2pp1q2/p7/1P2P3/P1N1P3/2P3PP/R2QKB1R w KQkq - 0 1"
+    };
+    int num_fens = 8;
+    int depth = 10;
+    U64 total_nodes = 0;
+    int start_time = get_time_ms();
+
+    for (int i = 0; i < num_fens; i++) {
+        printf("\nPosition %d/%d: %s\n", i + 1, num_fens, fens[i]);
+        parse_fen((char*)fens[i]);
+        search_position(depth);
+        total_nodes += global_nodes;
+    }
+
+    int end_time = get_time_ms();
+    int time_taken = end_time - start_time;
+    if (time_taken == 0) time_taken = 1;
+
+    printf("\n================================================\n");
+    printf("Benchmark Results:\n");
+    printf("Total Nodes: %llu\n", total_nodes);
+    printf("Total Time: %d ms\n", time_taken);
+    printf("NPS: %llu\n", (total_nodes * 1000) / (U64)time_taken);
+    printf("================================================\n");
+}
+
 
 void uci_loop() {
   // clear buffer
@@ -327,7 +362,7 @@ void uci_loop() {
     fflush(stdout); // ensure output reach
 
     if (!fgets(input, 2000, stdin)) {
-      continue;
+      break;
     }
     if (input[0] == '\n') continue;
 
@@ -351,6 +386,10 @@ void uci_loop() {
 
     if (strncmp(input, "go", 2) == 0) {
       parse_go(input); continue;
+    }
+
+    if (strncmp(input, "bench", 5) == 0) {
+        run_bench(); continue;
     }
 
     if (strncmp(input, "eval", 4) == 0) {

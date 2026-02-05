@@ -1,7 +1,7 @@
 gcc_warning_flags = -Wunused-variable -Wshadow -Wconversion -Wuninitialized -Wfloat-equal
 gcc_optimization_flags = -oFast -O3 -march=native -mtune=native -funroll-loops -finline-functions -flto -fomit-frame-pointer -fprefetch-loop-arrays -ffast-math
-release_gcc = gcc $(gcc_warning_flags) $(gcc_optimization_flags) -fopenmp src/*.c -o bin/echo
-normal_gcc = gcc $(gcc_warning_flags) src/*.c -o bin/echo -fopenmp
+release_gcc = gcc $(gcc_warning_flags) $(gcc_optimization_flags) -fopenmp src/*.c -o bin/echo -lm
+normal_gcc = gcc $(gcc_warning_flags) src/*.c -o bin/echo -fopenmp -lm
 
 default_linux:
 	clear;
@@ -69,7 +69,7 @@ r:
 	echo "-------------------------"
 
 win:
-		clear;x86_64-w64-mingw32-gcc src/echo.c -o bin/echo_win64.exe;wine ./bin/echo_win64.exe
+	clear; x86_64-w64-mingw32-gcc $(gcc_warning_flags) $(gcc_optimization_flags) -fopenmp src/*.c -o bin/echo_win64.exe -lm
 
 compile:
 	clear;

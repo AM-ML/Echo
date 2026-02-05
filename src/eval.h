@@ -41,10 +41,12 @@ static inline int isCastledQueenside(int king_square, int side);
 static inline int evaluateKingSafety(int phase);
 static inline int isOpenFile(int file_index);
 static inline int isPassedPawn(int side, int square);
-static inline int evaluatePawnStructure(int phase);
-static inline int evaluateRookActivity(int phase);
+static inline void evaluatePawnStructure(int phase, int *mg_score, int *eg_score);
+static inline void evaluateRookActivity(int phase, int *mg_score, int *eg_score);
 static inline int manhattan_distance(int sq1, int sq2);
 static inline int mopUpEval(int winning_side, int losing_side);
 int eval();
+U64 get_all_attackers(int square, U64 occupancy);
+int see(int move);
 
 #endif

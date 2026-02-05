@@ -1,4 +1,5 @@
 #include "search.h"
+#include <math.h>
 
 int get_time_ms() {
 #if defined(_WIN64) || defined(_WIN32)
@@ -21,6 +22,18 @@ int currmove;
 #pragma omp threadprivate(nodes, root_moves_searched, currmove)
 
 U64 global_nodes;
+int lmr_table[64][64];
+
+void init_search() {
+    for (int depth = 0; depth < 64; depth++) {
+        for (int moves = 0; moves < 64; moves++) {
+            if (depth > 0 && moves > 0)
+            lmr_table[depth][moves] = (int)(0.5 + log(depth) * log(moves) / 1.75);
+            else
+                lmr_table[depth][moves] = 0;
+        }
+    }
+}
 
 static inline void perft_driver(int depth) {
   if (depth == 0) {
@@ -121,15 +134,13 @@ static inline int score_move(int move, int tt_move) {
       target_piece = (side_to_move == white) ? bP : wP;
     } else {
       // Find the victim piece
-      int victim_start = (side_to_move == white) ? bP : wP;
-      int victim_end = (side_to_move == white) ? bK : wK;
-      for (int bb_piece = victim_start; bb_piece <= victim_end; bb_piece++) {
-        if (get_bit(bitboards[bb_piece], get_move_target(move))) {
-          target_piece = bb_piece;
-          break;
-        }
-      }
+      target_piece = piece_on_squares[get_move_target(move)];
+      if (target_piece == -1) target_piece = (side_to_move == white) ? bP : wP; // fallback
     }
+
+    // Use SEE to penalize bad captures
+    if (see(move) < 0) return 5000 + mvv_lva[target_piece][start_piece];
+
     // Score: 10000 + MVV[victim][attacker]
     return 10000 + mvv_lva[target_piece][start_piece];
   }
@@ -210,6 +221,8 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
       if (eval_score + ABS(material_score_mg[target_piece]) + 200 < alpha) continue;
     }
 
+    if (see(move) < 0) continue;
+
     COPY_BOARD();
     ply++;
     repetition_index++;
@@ -289,6 +302,11 @@ static inline int negamax(int alpha, int beta, int depth) {
   //       PRUNING LOGIC
   // ===========================
 
+  // Razoring
+  if (!pv_node && !in_check && depth == 1 && static_eval + 300 < alpha) {
+      return quiescence_search(alpha, beta, 0);
+  }
+
   // 5. Reverse Futility Pruning (Static Null Move)
   if (!pv_node && !in_check && depth <= 8) {
     int margin = 120 * depth;
@@ -364,6 +382,9 @@ static inline int negamax(int alpha, int beta, int depth) {
       continue;
     }
 
+    // SEE pruning for captures
+    if (is_capture && depth <= 3 && see(move) < 0) continue;
+
     COPY_BOARD();
     ply++;
     repetition_index++;
@@ -382,10 +403,15 @@ static inline int negamax(int alpha, int beta, int depth) {
     } else {
       // LMR Logic
       if (moves_searched >= 4 && depth >= 3 && !is_capture && !is_promo && !in_check) {
-        int reduction = 1 + (depth / 3) + (moves_searched / 12);
-        if (history_moves[get_move_piece(move)][get_move_target(move)] > (depth * 50)) reduction--;
-        if (reduction > depth - 1) reduction = depth - 1;
+        int d = depth < 64 ? depth : 63;
+        int m = moves_searched < 64 ? moves_searched : 63;
+        int reduction = lmr_table[d][m];
+
+        // Diversify reduction based on history
+        if (history_moves[get_move_piece(move)][get_move_target(move)] > (depth * 100)) reduction--;
+
         if (reduction < 1) reduction = 1;
+        if (reduction > depth - 1) reduction = depth - 1;
 
         score = -negamax(-alpha - 1, -alpha, depth - 1 - reduction);
       } else {
@@ -451,13 +477,9 @@ void search_position(int depth) {
   int last_score = 0;
   starttime = get_time_ms();
 
-  // CHANGE 1: Disable Multithreading on Windows
-  // We use a simple #ifndef check. If _WIN32 is defined, we run simply without the pragma.
-  #ifndef _WIN32
   #pragma omp parallel copyin(bitboards, sides_occupancies, piece_on_squares, \
                               side_to_move, can_castle, en_passant, hash_key, \
                               repetition_table, repetition_index)
-  #endif
   {
     int thread_id = omp_get_thread_num();
 
@@ -472,6 +494,12 @@ void search_position(int depth) {
 
       if (stopped) break;
 
+      // Lazy SMP: Auxiliary threads can search slightly different depths
+      int search_depth = cur_depth;
+      if (thread_id > 0) {
+          if ((cur_depth + thread_id) % 2 == 0) search_depth++;
+      }
+
       int score;
       int alpha = -INF;
       int beta = INF;
@@ -484,7 +512,7 @@ void search_position(int depth) {
 
       while (1) {
         if (stopped) break;
-        score = negamax(alpha, beta, cur_depth);
+        score = negamax(alpha, beta, search_depth);
 
         if (score <= alpha) {
           alpha -= delta;
@@ -508,7 +536,7 @@ void search_position(int depth) {
         int delta_tms = get_time_ms() - starttime;
         U64 nps = (delta_tms > 0) ? (global_nodes * 1000 / (U64) delta_tms) : 0;
 
-        printf("info depth %d seldepth %d score ", cur_depth, seldepth);
+        printf("info depth %d seldepth %d score ", search_depth, seldepth);
         if (score > MATE_SCORE) printf("mate %d ", (MATE_VALUE - score + 1) / 2);
         else if (score < -MATE_SCORE) printf("mate %d ", -(score + MATE_VALUE) / 2);
         else printf("cp %d ", score);

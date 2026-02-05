@@ -40,6 +40,7 @@ void init_all() {
   init_pawns_eval_masks();
   init_black_pst();
   init_evaluation();
+  init_search();
   // init_magic_numbers();
 }
 

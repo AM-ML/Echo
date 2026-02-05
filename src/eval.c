@@ -24,7 +24,8 @@ const int KingSideShieldedBonus = 15; // bonus for 3 front pawns defending kings
 const int QueenSideShieldedBonus = 15; // bonus for 3 front pawns defending queenside castle
 
 // the closer you are to promotion, the better
-const int passed_pawn_bonus[8] = { 0, 5, 10, 20, 35, 60, 100, 200 };
+const int passed_pawn_bonus_mg[8] = { 0, 5, 10, 20, 35, 60, 100, 200 };
+const int passed_pawn_bonus_eg[8] = { 0, 10, 20, 40, 70, 120, 200, 400 };
 
 
 // ---------------------------
@@ -598,8 +599,38 @@ static inline int isPassedPawn(int side, int square) {
   return !(passed_pawns_mask[side][square] & enemy_pawns);
 }
 
-static inline int evaluatePawnStructure(int phase) {
-  int score = 0;
+static inline int evaluateKingTropism() {
+    int score = 0;
+    int w_king_sq = get_lsb_index(bitboards[wK]);
+    int b_king_sq = get_lsb_index(bitboards[bK]);
+
+    // Weights for each piece type (N, B, R, Q)
+    const int tropism_weight[] = { 0, 3, 3, 2, 1, 0 };
+
+    // White pieces attacking black king
+    U64 pieces = bitboards[wN] | bitboards[wB] | bitboards[wR] | bitboards[wQ];
+    while (pieces) {
+        int sq = get_lsb_index(pieces);
+        int p = piece_on_squares[sq];
+        int dist = manhattan_distance(sq, b_king_sq);
+        score += (14 - dist) * tropism_weight[p];
+        pop_bit(pieces, sq);
+    }
+
+    // Black pieces attacking white king
+    pieces = bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ];
+    while (pieces) {
+        int sq = get_lsb_index(pieces);
+        int p = piece_on_squares[sq] - 6;
+        int dist = manhattan_distance(sq, w_king_sq);
+        score -= (14 - dist) * tropism_weight[p];
+        pop_bit(pieces, sq);
+    }
+
+    return score;
+}
+
+static inline void evaluatePawnStructure(int phase, int *mg_score, int *eg_score) {
   U64 bitboard;
   int square;
 
@@ -611,7 +642,8 @@ static inline int evaluatePawnStructure(int phase) {
     // Passed Pawn Check
     // If no black pawns are in front or on adjacent files
     if (!(passed_pawns_mask[white][square] & bitboards[bP])) {
-      score += passed_pawn_bonus[7 - get_rank_index(square)];
+      *mg_score += passed_pawn_bonus_mg[7 - get_rank_index(square)];
+      *eg_score += passed_pawn_bonus_eg[7 - get_rank_index(square)];
 
       // Connected Passed Pawn Bonus
       // Condition: 1. Defended by a friendly pawn
@@ -624,7 +656,8 @@ static inline int evaluatePawnStructure(int phase) {
           int defender_sq = get_lsb_index(defenders);
           // Check if defender is passed
           if (!(passed_pawns_mask[white][defender_sq] & bitboards[bP])) {
-            score += ConnectedPassedPawnBonus;
+            *mg_score += ConnectedPassedPawnBonus;
+            *eg_score += ConnectedPassedPawnBonus;
             break; // Bonus added once per connection structure
           }
           pop_bit(defenders, defender_sq);
@@ -634,7 +667,14 @@ static inline int evaluatePawnStructure(int phase) {
 
     // 2. Isolated Pawn Check
     if (!(isolated_pawns_mask[square] & bitboards[wP])) {
-      score += IsolatedPawnPenalty;
+      *mg_score += IsolatedPawnPenalty;
+      *eg_score += IsolatedPawnPenalty;
+    }
+
+    // 3. Doubled Pawn Check
+    if (count_bits(bitboards[wP] & file_mask(square)) > 1) {
+      *mg_score += DoublePawnPenalty;
+      *eg_score += DoublePawnPenalty;
     }
 
     pop_bit(bitboard, square);
@@ -647,7 +687,8 @@ static inline int evaluatePawnStructure(int phase) {
 
     // Passed Pawn Check
     if (!(passed_pawns_mask[black][square] & bitboards[wP])) {
-      score -= passed_pawn_bonus[get_rank_index(square)];
+      *mg_score -= passed_pawn_bonus_mg[get_rank_index(square)];
+      *eg_score -= passed_pawn_bonus_eg[get_rank_index(square)];
 
       // Connected Passed Pawn Bonus
       U64 defenders = pawn_attacks[white][square] & bitboards[bP];
@@ -656,7 +697,8 @@ static inline int evaluatePawnStructure(int phase) {
         while (defenders) {
           int defender_sq = get_lsb_index(defenders);
           if (!(passed_pawns_mask[black][defender_sq] & bitboards[wP])) {
-            score -= ConnectedPassedPawnBonus;
+            *mg_score -= ConnectedPassedPawnBonus;
+            *eg_score -= ConnectedPassedPawnBonus;
             break;
           }
           pop_bit(defenders, defender_sq);
@@ -666,17 +708,22 @@ static inline int evaluatePawnStructure(int phase) {
 
     // Isolated Pawn Penatly
     if (!(isolated_pawns_mask[square] & bitboards[bP])) {
-      score -= IsolatedPawnPenalty;
+      *mg_score -= IsolatedPawnPenalty;
+      *eg_score -= IsolatedPawnPenalty;
+    }
+
+    // Doubled Pawn Check
+    if (count_bits(bitboards[bP] & file_mask(square)) > 1) {
+      *mg_score -= DoublePawnPenalty;
+      *eg_score -= DoublePawnPenalty;
     }
 
     pop_bit(bitboard, square);
   }
 
-  return score;
 }
 
-static inline int evaluateRookActivity(int phase) {
-  int score = 0;
+static inline void evaluateRookActivity(int phase, int *mg_score, int *eg_score) {
   U64 bitboard;
   int square;
 
@@ -692,9 +739,11 @@ static inline int evaluateRookActivity(int phase) {
 
     // Mobility/Open Files
     if (!(pawns_file_mask[square] & bitboards[wP])) {
-      score += RookSemiOpenFileBonus;
+      *mg_score += RookSemiOpenFileBonus;
+      *eg_score += RookSemiOpenFileBonus;
       if (!(pawns_file_mask[square] & bitboards[bP])) {
-        score += RookOpenFileBonus;
+        *mg_score += RookOpenFileBonus;
+        *eg_score += RookOpenFileBonus;
       }
     }
 
@@ -702,7 +751,8 @@ static inline int evaluateRookActivity(int phase) {
     if (get_rank_index(square) == 1) { // Rank 7 (rows 0-7, 8-15...) -> Index 1 is Rank 7
       // Condition: Pawns on Rank 7 OR King on Rank 8
       if ((bitboards[bP] & rank_7) || b_king_on_backrank) {
-        score += Rook7thRankBonus;
+        *mg_score += Rook7thRankBonus;
+        *eg_score += Rook7thRankBonus;
         w_infiltration_count++;
       }
     }
@@ -710,7 +760,10 @@ static inline int evaluateRookActivity(int phase) {
     pop_bit(bitboard, square);
   }
   // Double Infiltration Bonus
-  if (w_infiltration_count > 1) score += Rook7thRankDoubleBonus;
+  if (w_infiltration_count > 1) {
+      *mg_score += Rook7thRankDoubleBonus;
+      *eg_score += Rook7thRankDoubleBonus;
+  }
 
 
   // --- BLACK ROOKS ---
@@ -725,9 +778,11 @@ static inline int evaluateRookActivity(int phase) {
 
     // Mobility/Open Files
     if (!(pawns_file_mask[square] & bitboards[bP])) {
-      score -= RookSemiOpenFileBonus;
+      *mg_score -= RookSemiOpenFileBonus;
+      *eg_score -= RookSemiOpenFileBonus;
       if (!(pawns_file_mask[square] & bitboards[wP])) {
-        score -= RookOpenFileBonus;
+        *mg_score -= RookOpenFileBonus;
+        *eg_score -= RookOpenFileBonus;
       }
     }
 
@@ -735,7 +790,8 @@ static inline int evaluateRookActivity(int phase) {
     if (get_rank_index(square) == 6) { // Rank 2
       // Condition: Pawns on Rank 2 OR King on Rank 1
       if ((bitboards[wP] & rank_2) || w_king_on_backrank) {
-        score -= Rook7thRankBonus;
+        *mg_score -= Rook7thRankBonus;
+        *eg_score -= Rook7thRankBonus;
         b_infiltration_count++;
       }
     }
@@ -743,7 +799,10 @@ static inline int evaluateRookActivity(int phase) {
     pop_bit(bitboard, square);
   }
   // Double Infiltration Bonus
-  if (b_infiltration_count >= 2) score -= Rook7thRankDoubleBonus;
+  if (b_infiltration_count >= 2) {
+      *mg_score -= Rook7thRankDoubleBonus;
+      *eg_score -= Rook7thRankDoubleBonus;
+  }
 
 
   // --- BATTERY BONUS ---
@@ -759,7 +818,8 @@ static inline int evaluateRookActivity(int phase) {
 
         // Condition: Q+R or R+R (Total >= 2, with at least 1 Rook)
         if (rooks >= 2 || (rooks >= 1 && queens >= 1)) {
-          score += BatteryBonus;
+          *mg_score += BatteryBonus;
+          *eg_score += BatteryBonus;
         }
       }
     }
@@ -775,13 +835,13 @@ static inline int evaluateRookActivity(int phase) {
         int queens = count_bits(bitboards[bQ] & file_m);
 
         if (rooks >= 2 || (rooks >= 1 && queens >= 1)) {
-          score -= BatteryBonus;
+          *mg_score -= BatteryBonus;
+          *eg_score -= BatteryBonus;
         }
       }
     }
   }
 
-  return score;
 }
 
 // Manhattan distance between two squares
@@ -839,15 +899,28 @@ int eval() {
   int phase = calculatePhaseFactor();
 
   // Pawn Structure (Passed, Isolated, Connected, Doubled)
-  score += evaluatePawnStructure(phase);
+  evaluatePawnStructure(phase, &mg_score, &eg_score);
 
-  // King Safety & Rook Activation (Only in Middlegame)
+  // Bishop Pair Bonus
+  if (count_bits(bitboards[wB]) >= 2) {
+      mg_score += 30;
+      eg_score += 50;
+  }
+  if (count_bits(bitboards[bB]) >= 2) {
+      mg_score -= 30;
+      eg_score -= 50;
+  }
+
+  // King Safety (Only in Middlegame)
   // phase > 50 is a clever cut-off to save speed
   // but yields some risk.
   if (phase > 50) {
     mg_score += evaluateKingSafety(phase);
-    mg_score += evaluateRookActivity(phase);
+    mg_score += evaluateKingTropism();
   }
+
+  // Rook Activity (Always tapered)
+  evaluateRookActivity(phase, &mg_score, &eg_score);
 
   // Mobility & Piece Specifics
 
@@ -945,4 +1018,72 @@ int eval() {
   //  e.g. advancing a pawn for free by attacking a queen
   final_score += (side_to_move == white) ? tempo_bonus : -tempo_bonus;
   return (side_to_move == white) ? final_score : -final_score;
+}
+
+U64 get_all_attackers(int square, U64 occupancy) {
+    U64 attackers = 0;
+    // Pawns
+    attackers |= pawn_attacks[white][square] & bitboards[bP];
+    attackers |= pawn_attacks[black][square] & bitboards[wP];
+    // Knights
+    attackers |= knight_attacks[square] & (bitboards[wN] | bitboards[bN]);
+    // King
+    attackers |= king_attacks[square] & (bitboards[wK] | bitboards[bK]);
+    // Sliding pieces
+    attackers |= get_bishop_attacks(square, occupancy) & (bitboards[wB] | bitboards[bB] | bitboards[wQ] | bitboards[bQ]);
+    attackers |= get_rook_attacks(square, occupancy) & (bitboards[wR] | bitboards[bR] | bitboards[wQ] | bitboards[bQ]);
+
+    return attackers;
+}
+
+int see(int move) {
+    int to = get_move_target(move);
+    int from = get_move_source(move);
+
+    int piece = get_move_piece(move);
+    int captured = get_move_capture_flag(move) ? piece_on_squares[to] : -1;
+    // Special case for en passant
+    if (get_move_en_passant_flag(move)) captured = (side_to_move == white ? bP : wP);
+
+    int gain[32];
+    int d = 0;
+    gain[0] = (captured == -1) ? 0 : ABS(material_score_mg[captured]);
+
+    U64 occupancy = sides_occupancies[both] ^ (1ULL << from);
+    int side = side_to_move ^ 1;
+    int current_piece = piece;
+
+    while (1) {
+        U64 attackers = get_all_attackers(to, occupancy);
+        int attacker_sq = -1;
+        int attacker_piece = -1;
+
+        // Find least valuable attacker for the current side
+        for (int p = (side == white ? wP : bP); p <= (side == white ? wK : bK); p++) {
+            U64 subset = attackers & bitboards[p] & occupancy;
+            if (subset) {
+                attacker_piece = p;
+                attacker_sq = get_lsb_index(subset);
+                break;
+            }
+        }
+
+        if (attacker_sq == -1) break;
+
+        d++;
+        gain[d] = ABS(material_score_mg[current_piece]) - gain[d-1];
+        current_piece = attacker_piece;
+        occupancy ^= (1ULL << attacker_sq);
+        side ^= 1;
+
+        // Optimization: if the current side cannot improve their position, they won't continue the exchange.
+        if (MAX(-gain[d-1], gain[d]) < 0) break;
+    }
+
+    while (d > 0) {
+        gain[d-1] = -MAX(-gain[d-1], gain[d]);
+        d--;
+    }
+
+    return gain[0];
 }
