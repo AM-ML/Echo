@@ -13,7 +13,7 @@ int get_time_ms() {
 U64 nodes;
 int seldepth = 0;
 
-// info output stuff
+// UCI info output
 int root_moves_searched;
 int root_move_count;
 int currmove;
@@ -41,7 +41,7 @@ static inline void perft_driver(int depth) {
     if (!make_move(move, allow_all_moves)) {
       continue;
     }
-    perft_driver(depth - 1); // call perft recursively
+    perft_driver(depth - 1);
 
     RESTORE_BOARD();
 
@@ -97,7 +97,7 @@ int pv_table[MAX_PLY][MAX_PLY];
 int apply_pv, pv_score;
 
 static inline void enable_pv_scoring(Moves* ml) {
-  apply_pv = 0; // reset pv detection flag
+  apply_pv = 0;
 
   for(int i = 0; i < ml -> count; i++) {
     if(pv_table[0][ply] == ml -> moves[i]) {
@@ -109,10 +109,10 @@ static inline void enable_pv_scoring(Moves* ml) {
 }
 
 static inline int score_move(int move, int tt_move) {
-  // 1. PV/TT Move has highest priority
+  // TT/PV move priority
   if (move == tt_move) return 30000;
 
-  // 2. Captures (MVV/LVA)
+  // Capture ordering (MVV/LVA)
   if (get_move_capture_flag(move)) {
     int target_piece = wP;
     int start_piece = get_move_piece(move);
@@ -130,10 +130,9 @@ static inline int score_move(int move, int tt_move) {
         }
       }
     }
-    // Score: 10000 + MVV[victim][attacker]
     return 10000 + mvv_lva[target_piece][start_piece];
   }
-  // 3. Quiet Moves
+  // Quiet move ordering
   else {
     if (killer_moves[0][ply] == move) return 9000;
     else if (killer_moves[1][ply] == move) return 8000;
@@ -161,8 +160,8 @@ static inline void sort_moves(Moves *ml, int tt_move) {
   }
 }
 
-int orig_depth = 0; // for currmove output
-int curnt_odepth = 0; // for currmove output
+int orig_depth = 0;
+int curnt_odepth = 0;
 
 static inline int quiescence_search(int alpha, int beta, int qs_depth) {
   if ((nodes & 2047) == 0) {
@@ -191,7 +190,7 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
   for (int i = 0; i < ml.count; i++) {
     int move = ml.moves[i];
 
-    // --- Delta Pruning ---
+    // Delta pruning
     if (!get_move_promoted_piece(move)) {
       int target_piece = wP;
 
@@ -232,16 +231,16 @@ static inline int quiescence_search(int alpha, int beta, int qs_depth) {
   return alpha;
 }
 
-// Enhanced Negamax with improved LMR and extensions
+// Negamax search with alpha-beta pruning
 static inline int negamax(int alpha, int beta, int depth) {
-  // 1. PV Node Initialization
+  // PV node init
   pv_length[ply] = ply;
   int pv_node = (beta - alpha) > 1;
 
   if (ply > seldepth) seldepth = ply;
 
 
-  // 2. Base Cases
+  // Base cases
   if (ply && is_repetition()) return 0;
 
   // Check Extension (MUST BE BEFORE depth <= 0 check)
@@ -249,13 +248,8 @@ static inline int negamax(int alpha, int beta, int depth) {
   int in_check = is_square_attacked_by(king_sq, side_to_move ^ 1);
   if (in_check) depth++;
 
-  // 3. Drop into Quiescence Search if depth is exhausted
-  if (depth <= 0) {
-    // Safe guard: If we are STILL in check here (shouldn't happen often with extension),
-    // we must not do QS, but force a search to find evasions.
-    // However, with depth++ above, we usually ensure we search evasions.
-    return quiescence_search(alpha, beta, 0);
-  }
+  // Leaf node handling
+  if (depth <= 0) return quiescence_search(alpha, beta, 0);
 
   if ((nodes & 2047) == 0) {
     #pragma omp atomic update
@@ -269,7 +263,7 @@ static inline int negamax(int alpha, int beta, int depth) {
   int tt_move = 0;
   int val;
 
-  // 4. Transposition Table Probe
+  // TT lookup
   if (ply && ((val = probeTT(alpha, beta, depth)) != NO_TT_ENTRY_FOUND) && !pv_node) {
     return val;
   }
@@ -285,17 +279,15 @@ static inline int negamax(int alpha, int beta, int depth) {
   // Pre-calculate static eval for pruning
   int static_eval = eval();
 
-  // ===========================
-  //       PRUNING LOGIC
-  // ===========================
+  // Pruning logic
 
-  // 5. Reverse Futility Pruning (Static Null Move)
+  // Reverse futility pruning
   if (!pv_node && !in_check && depth <= 8) {
     int margin = 120 * depth;
     if (static_eval - margin >= beta) return static_eval;
   }
 
-  // 6. Null Move Pruning
+  // Null move pruning
   U64 has_pieces = ((side_to_move == white)
     ? (bitboards[wN] | bitboards[wB] | bitboards[wR] | bitboards[wQ])
     : (bitboards[bN] | bitboards[bB] | bitboards[bR] | bitboards[bQ]));
@@ -320,7 +312,7 @@ static inline int negamax(int alpha, int beta, int depth) {
     if (score >= beta) return beta;
   }
 
-  // 7. Futility Pruning
+  // Futility pruning
   int f_prune = 0;
   int f_margin[] = { 0, 200, 300, 500 };
   if (!pv_node && !in_check && depth <= 3 &&
@@ -328,9 +320,7 @@ static inline int negamax(int alpha, int beta, int depth) {
     f_prune = 1;
   }
 
-  // ===========================
-  //       MOVE SEARCH
-  // ===========================
+  // Move searching
 
   Moves ml;
   generate_moves(&ml);
@@ -441,9 +431,7 @@ static inline int negamax(int alpha, int beta, int depth) {
   return alpha;
 }
 
-// Enhanced search with aspiration windows
-// Enhanced search with aspiration windows
-// Enhanced search with aspiration windows
+// Search position using iterative deepening
 void search_position(int depth) {
   stopped = 0;
   global_nodes = 0;
@@ -451,8 +439,7 @@ void search_position(int depth) {
   int last_score = 0;
   starttime = get_time_ms();
 
-  // CHANGE 1: Disable Multithreading on Windows
-  // We use a simple #ifndef check. If _WIN32 is defined, we run simply without the pragma.
+  // Parallel search via OpenMP
   #ifndef _WIN32
   #pragma omp parallel copyin(bitboards, sides_occupancies, piece_on_squares, \
                               side_to_move, can_castle, en_passant, hash_key, \
@@ -461,13 +448,13 @@ void search_position(int depth) {
   {
     int thread_id = omp_get_thread_num();
 
-    // Thread-local search variables
+    // Thread-local state
     nodes = 0;
     ply = 0;
     memset(killer_moves, 0, sizeof(killer_moves));
     memset(history_moves, 0, sizeof(history_moves));
 
-    // Iterative Deepening
+    // Iterative deepening loop
     for (int cur_depth = 1; cur_depth <= depth; cur_depth++) {
 
       if (stopped) break;

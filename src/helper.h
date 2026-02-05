@@ -14,10 +14,10 @@ void print_board(int flag);
   (print_bitboard(get_attacked_squares_by((side))))
 
 
-int bin(int p); // testing function
-void automate_occupancy(U64 mask); // animation function
+int bin(int p);
+void automate_occupancy(U64 mask);
 
-// --- move output debugging function
+// Debug: Print move info
 #define print_move_info(move)                                                  \
   INFO("Source Square: %s", square_to_notation[get_move_source(move)]);        \
   INFO("Target Square: %s", square_to_notation[get_move_target(move)]);        \

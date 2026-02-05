@@ -1,7 +1,7 @@
 #include "helper.h"
 #include "tt.h"
 
-// print bitboard
+// Print bitboard visualization
 void print_bitboard(U64 bitboard) {
 #if defined(_WIN32) || defined(_WIN64)
   printf("\nPosition: %llu\n", bitboard);
@@ -25,17 +25,14 @@ void print_bitboard(U64 bitboard) {
   }
 
   printf("    _______________\n");
-  printf("    A B C D E F G H\n"); // for navigation
+  printf("    A B C D E F G H\n");
 
 #else
-  // print position id
   printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", bitboard);
 
-  // loop over ranks / rows
   for (int rank = 0; rank < 8; rank++) {
-    printf("\033[1;93m%d|  \033[0;0m", 8 - rank); // for navigation
+    printf("\033[1;93m%d|  \033[0;0m", 8 - rank);
 
-    // loop over files / columns
     for (int file = 0; file < 8; file++) {
       int square = RF_2SQ(rank, file);
 
@@ -48,12 +45,11 @@ void print_bitboard(U64 bitboard) {
       }
     }
 
-    // seperate ranks
     printf("\n");
   }
 
   printf("    \033[1;93m_______________\n");
-  printf("    A B C D E F G H\033[0;0m\n"); // for navigation
+  printf("    A B C D E F G H\033[0;0m\n");
 #endif
 }
 
@@ -104,17 +100,14 @@ void print_bitboard_piece(int piece_square, U64 bitboard) {
   }
 
   printf("    _______________\n");
-  printf("    A B C D E F G H\n"); // for navigation
+  printf("    A B C D E F G H\n");
 
 #else
-  // print position id
   printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m\n", bitboard);
 
-  // loop over ranks / rows
   for (int rank = 0; rank < 8; rank++) {
-    printf("\033[1;93m%d|  \033[0;0m", 8 - rank); // for navigation
+    printf("\033[1;93m%d|  \033[0;0m", 8 - rank);
 
-    // loop over files / columns
     for (int file = 0; file < 8; file++) {
       int square = RF_2SQ(rank, file);
 
@@ -131,18 +124,16 @@ void print_bitboard_piece(int piece_square, U64 bitboard) {
       }
     }
 
-    // seperate ranks
     printf("\n");
   }
 
   printf("    \033[1;93m_______________\n");
-  printf("    A B C D E F G H\033[0;0m\n"); // for navigation
+  printf("    A B C D E F G H\033[0;0m\n");
 #endif
 }
 
 void print_board(int flag) {
   if (FORCE_ASCII) {
-    // Windows / ASCII mode
     printf("\nPosition: %llu\n", sides_occupancies[both]);
     printf("Castling: %c%c%c%c\n",
            can_castle & WCK ? 'K' : '_',
@@ -154,7 +145,6 @@ void print_board(int flag) {
     if (side_to_move != -1)
       printf("%s To Move\n", side_to_move == white ? "White" : "Black");
   } else {
-    // Colored Unicode mode
     printf("\n\033[1;93mPosition: \033[1;95m%llu\033[0;0m",
            sides_occupancies[both]);
     printf("\n\033[1;93mHash Key: \033[1;95m%llx\033[0;0m",
@@ -172,26 +162,22 @@ void print_board(int flag) {
   }
 
   for (int rank = 0; rank < 8; rank++) {
-    // top border of row
     printf("   ");
     for (int file = 0; file < 8; file++) printf("+---");
     printf("+\n");
 
-    // rank label
     if (FORCE_ASCII)
       printf(" %d |", 8 - rank);
     else
       printf(" \033[1;93m%d\033[0;0m |", 8 - rank);
 
-    // print pieces
     for (int file = 0; file < 8; file++) {
       int square = RF_2SQ(rank, file);
-      char *c = " ";   // empty square
-      char *color = ""; // default no color
+      char *c = " ";
+      char *color = "";
 
       if (get_bit(sides_occupancies[both], square)) {
         if (!FORCE_ASCII && flag) {
-          // Unicode mode
           if (get_bit(bitboards[wP], square))
             c = unicode_pieces[wP], color = "\033[1;96m";
           else if (get_bit(bitboards[wB], square))
@@ -218,7 +204,6 @@ void print_board(int flag) {
           else if (get_bit(bitboards[bK], square))
             c = unicode_pieces[bK], color = "\033[36m";
         } else {
-          // ASCII mode
           if (get_bit(bitboards[wP], square))
             c = "P";
           else if (get_bit(bitboards[wB], square))
@@ -246,7 +231,6 @@ void print_board(int flag) {
         }
       }
 
-      // print square
       if (!FORCE_ASCII && flag)
         printf(" %s%s\033[0;0m |", color, c);
       else
@@ -255,12 +239,10 @@ void print_board(int flag) {
     printf("\n");
   }
 
-  // bottom border
   printf("   ");
   for (int file = 0; file < 8; file++) { printf("+---"); }
   printf("+\n");
 
-  // file letters
   if (FORCE_ASCII)
     printf("     A   B   C   D   E   F   G   H\n");
   else

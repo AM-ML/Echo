@@ -1,9 +1,6 @@
 #include "move_gen.h"
 
-// generate moves function
-
-
-// --- make move ---
+// Make move on board
 int make_move(int move, int move_flag) {
   if (move_flag == allow_all_moves) {
     COPY_BOARD();
@@ -17,68 +14,61 @@ int make_move(int move, int move_flag) {
     int double_push_flag = get_move_double_push_flag(move);
     int en_passant_flag = get_move_en_passant_flag(move);
 
-    // Safety Checks
+    // Basic validation
     if (source_sqr < 0 || source_sqr >= 64 || target_sqr < 0 ||
         target_sqr >= 64 || piece < 0 || piece >= 12 ||
         source_sqr == target_sqr) {
       RESTORE_BOARD();
       return 0;
     }
-    // Ensure piece is actually on source
+    // Verify piece at source
     if (!get_bit(bitboards[piece], source_sqr)) {
       RESTORE_BOARD();
       return 0;
     }
 
-    // handle captures
+    // Handle regular captures
     if (capture_flag && !en_passant_flag) {
       int captured_piece = piece_on_squares[target_sqr];
-
-      // If mailbox is desynced or empty, this is an illegal move
       if (captured_piece == -1) { RESTORE_BOARD(); return 0; }
 
-      // Update Hash and Bitboards for victim
       hash_key ^= piece_keys[captured_piece][target_sqr];
       pop_bit(bitboards[captured_piece], target_sqr);
     }
 
-    // Move the Piece (Updates Bitboards & Mailbox)
-    hash_key ^= piece_keys[piece][source_sqr]; // Remove from source
+    // Move piece
+    hash_key ^= piece_keys[piece][source_sqr];
     pop_bit(bitboards[piece], source_sqr);
     piece_on_squares[source_sqr] = -1;
 
-    hash_key ^= piece_keys[piece][target_sqr]; // Add to target
+    hash_key ^= piece_keys[piece][target_sqr];
     set_bit(bitboards[piece], target_sqr);
     piece_on_squares[target_sqr] = piece;
 
-    // Handle Promotion
+    // Handle promotion
     if (promoted_piece) {
-        // Remove the pawn we just placed
         pop_bit(bitboards[(side_to_move == white) ? wP : bP], target_sqr);
         hash_key ^= piece_keys[(side_to_move == white) ? wP : bP][target_sqr];
 
-        // Add the promoted piece
         set_bit(bitboards[promoted_piece], target_sqr);
         hash_key ^= piece_keys[promoted_piece][target_sqr];
         piece_on_squares[target_sqr] = promoted_piece;
     }
 
-    // Handle En Passant CAPTURE
+    // Handle en passant capture
     if (en_passant_flag) {
       if (side_to_move == white) {
-        // Remove Black Pawn south of target
         pop_bit(bitboards[bP], target_sqr + 8);
         hash_key ^= piece_keys[bP][target_sqr + 8];
         piece_on_squares[target_sqr + 8] = -1;
       } else {
-        // Remove White Pawn north of target
         pop_bit(bitboards[wP], target_sqr - 8);
         hash_key ^= piece_keys[wP][target_sqr - 8];
         piece_on_squares[target_sqr - 8] = -1;
       }
     }
 
-    // Handle En Passant STATE Update
+    // Update en passant state
     if (en_passant != no_square) hash_key ^= enpassant_keys[en_passant];
     en_passant = no_square;
 
@@ -87,7 +77,7 @@ int make_move(int move, int move_flag) {
       hash_key ^= enpassant_keys[en_passant];
     }
 
-    // Handle Castling (Move the Rook)
+    // Handle castling
     if (castling_flag) {
       switch (target_sqr) {
         case (g1): // White Kingside
@@ -113,7 +103,7 @@ int make_move(int move, int move_flag) {
       }
     }
 
-    // Update Castling Rights & Side
+    // Update castling rights
     hash_key ^= castle_keys[can_castle];
     can_castle &= castling_rights[source_sqr];
     can_castle &= castling_rights[target_sqr];
@@ -124,7 +114,7 @@ int make_move(int move, int move_flag) {
     side_to_move ^= 1;
     hash_key ^= side_to_move_key;
 
-    // Legality Check
+    // Verify king safety
     int king_sq = get_lsb_index(bitboards[(side_to_move == white) ? bK : wK]);
 
     if (is_square_attacked_by(king_sq, side_to_move)) {
@@ -135,7 +125,7 @@ int make_move(int move, int move_flag) {
     }
   }
   else {
-    // Capture moves only logic
+    // Handle capture-only flag
     if (get_move_capture_flag(move)) return make_move(move, allow_all_moves);
     else return 0;
   }
@@ -159,10 +149,7 @@ void generate_moves(Moves *moves_list) {
           src_sqr = get_lsb_index(position);
           dest_sqr = src_sqr - 8;
 
-          // FIX: Check dest_sqr is within bounds (< a8 means >= 0)
           if (!(dest_sqr < a8) && !get_bit(sides_occupancies[both], dest_sqr)) {
-
-            // FIX: Promotion happens on rank 7 (squares a7-h7 have indices 8-15)
             if (src_sqr >= a7 && src_sqr <= h7) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, wQ, 0, 0, 0, 0));
@@ -176,7 +163,6 @@ void generate_moves(Moves *moves_list) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, 0, 0, 0, 0, 0));
 
-              // FIX: Double push from rank 2 (squares a2-h2 have indices 48-55)
               if (src_sqr >= a2 && src_sqr <= h2 &&
                   !get_bit(sides_occupancies[both], dest_sqr - 8)) {
                 add_move(moves_list,
@@ -188,7 +174,6 @@ void generate_moves(Moves *moves_list) {
           attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
-            // FIX: Proper bounds checking
             if (dest_sqr < 0 || dest_sqr >= no_square) {
               pop_bit(attacks, dest_sqr);
               continue;
@@ -258,10 +243,7 @@ void generate_moves(Moves *moves_list) {
           src_sqr = get_lsb_index(position);
           dest_sqr = src_sqr + 8;
 
-          // FIX: Check dest_sqr is within bounds (<= h1 means < 64)
           if (!(dest_sqr > h1) && !get_bit(sides_occupancies[both], dest_sqr)) {
-
-            // FIX: Promotion happens on rank 2 (squares a2-h2 have indices 48-55)
             if (src_sqr >= a2 && src_sqr <= h2) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, bP, bQ, 0, 0, 0, 0));
@@ -275,7 +257,6 @@ void generate_moves(Moves *moves_list) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, bP, 0, 0, 0, 0, 0));
 
-              // FIX: Double push from rank 7 (squares a7-h7 have indices 8-15)
               if (src_sqr >= a7 && src_sqr <= h7 &&
                   !get_bit(sides_occupancies[both], dest_sqr + 8)) {
                 add_move(moves_list,
@@ -286,7 +267,6 @@ void generate_moves(Moves *moves_list) {
           attacks = pawn_attacks[black][src_sqr] & sides_occupancies[white];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
-            // FIX: Proper bounds checking
             if (dest_sqr < 0 || dest_sqr >= no_square) {
               pop_bit(attacks, dest_sqr);
               continue;
@@ -355,7 +335,6 @@ void generate_moves(Moves *moves_list) {
         attacks = knight_attacks[src_sqr] & ~sides_occupancies[side_to_move];
         while (attacks) {
           dest_sqr = get_lsb_index(attacks);
-          // FIX: Proper bounds checking
           if (dest_sqr < 0 || dest_sqr >= no_square) {
             pop_bit(attacks, dest_sqr);
             continue;
@@ -484,28 +463,25 @@ void generate_moves(Moves *moves_list) {
   }
 }
 
+// Generate capture moves
 void generate_capture_moves(Moves *moves_list) {
   moves_list->count = 0;
   int src_sqr, dest_sqr;
-  U64 position, attacks; // current iteration's piece bitboard & its attacks map
+  U64 position, attacks;
 
   int base = side_to_move == white? wP : bP;
   for (int i = 0; i < 6; i++) {
     int piece = base + i;
     position = bitboards[piece];
 
-    // generating pawn capture moves
     if (side_to_move == white) {
       if (piece == wP) {
         while (position) {
           src_sqr = get_lsb_index(position);
-
-          // Only pawn captures (no quiet moves)
           attacks = pawn_attacks[white][src_sqr] & sides_occupancies[black];
           while (attacks) {
             dest_sqr = get_lsb_index(attacks);
-            if (dest_sqr < 0) { /* shouldn't happen because while(attacks) guards it */ continue; }
-            // pawn capture promotion move
+            if (dest_sqr < 0) continue;
             if (src_sqr >= a7 && src_sqr <= h7) {
               add_move(moves_list,
                        encode_move(src_sqr, dest_sqr, wP, wQ, 1, 0, 0, 0));
@@ -524,7 +500,6 @@ void generate_capture_moves(Moves *moves_list) {
             pop_bit(attacks, dest_sqr);
           }
 
-          // en passant capture
           if (en_passant != no_square) {
             U64 can_en_passant =
                 pawn_attacks[white][src_sqr] & (1ULL << en_passant);
@@ -581,7 +556,6 @@ void generate_capture_moves(Moves *moves_list) {
       }
     }
 
-    // knight captures only
     if ((side_to_move == white) ? piece == wN : piece == bN) {
       while (position) {
         src_sqr = get_lsb_index(position);
@@ -597,7 +571,6 @@ void generate_capture_moves(Moves *moves_list) {
       }
     }
 
-    // bishop captures only
     if ((side_to_move == white) ? piece == wB : piece == bB) {
       while (position) {
         src_sqr = get_lsb_index(position);
@@ -614,7 +587,6 @@ void generate_capture_moves(Moves *moves_list) {
       }
     }
 
-    // rook captures only
     if ((side_to_move == white) ? piece == wR : piece == bR) {
       while (position) {
         src_sqr = get_lsb_index(position);
@@ -631,7 +603,6 @@ void generate_capture_moves(Moves *moves_list) {
       }
     }
 
-    // queen captures only
     if ((side_to_move == white) ? piece == wQ : piece == bQ) {
       while (position) {
         src_sqr = get_lsb_index(position);
@@ -648,7 +619,6 @@ void generate_capture_moves(Moves *moves_list) {
       }
     }
 
-    // king captures only (no castling)
     if ((side_to_move == white) ? piece == wK : piece == bK) {
       while (position) {
         src_sqr = get_lsb_index(position);

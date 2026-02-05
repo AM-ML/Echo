@@ -7,14 +7,6 @@
 
 void init_sliding_pieces(int flag);
 
-// get attacks from magic index
-// #define get_bishop_attacks(square, blockers) (blockers = (((blockers &
-// bishop_masks[square]) * bishop_magic_numbers[square])) >> (64 -
-// relevant_bishop_count_bits[square]))
-
-// #define get_rook_attacks(square, blockers) (blockers = (((blockers &
-// rook_masks[square]) * rook_magic_numbers[square])) >> (64 -
-// relevant_rook_count_bits[square]))
 U64 get_bishop_attacks(int square, U64 blockers);
 U64 get_rook_attacks(int square, U64 blockers);
 U64 get_queen_attacks(int square, U64 blockers);

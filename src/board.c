@@ -5,8 +5,7 @@ int get_lsb_index(U64 bitboard) {
 }
 #include "tt.h"
 
-// switched black pieces to be used for white and same for black pieces
-// due to better visual appearance
+// Piece icons for display
 char *unicode_pieces[12] = {"♟", "♞", "♝", "♜", "♛", "♚",
                             "♙", "♘", "♗", "♖", "♕", "♔"};
 char ascii_pieces[13] = "PNBRQKpnbrqk";
@@ -15,9 +14,9 @@ int decode_ascii_pieces[] = {
     ['p'] = bP, ['n'] = bN, ['b'] = bB, ['r'] = bR, ['q'] = bQ, ['k'] = bK,
 };
 
-U64 bitboards[12];        // pieces bbs
-U64 sides_occupancies[3]; // sides
-int piece_on_squares[64]; // for faster move gen + make, -1 = empty
+U64 bitboards[12];        // Piece bitboards
+U64 sides_occupancies[3]; // Side occupancies
+int piece_on_squares[64]; // Piece at square lookup (-1 = empty)
 
 int side_to_move = -1;
 int can_castle; // WCK WCQ BCQ BCK
@@ -77,14 +76,11 @@ int repetition_index = 0;
 
 #pragma omp threadprivate(repetition_table, repetition_index)
 
-// position repetition detection
-int is_repetition()
-{
-    // loop over repetition indicies range
-    for (int index = 0; index < repetition_index; index++)
-        // if we found the hash key same with a current
-        if (repetition_table[index] == hash_key)
-          return 1;
+// Detect board repetitions
+int is_repetition() {
+  for (int index = 0; index < repetition_index; index++)
+    if (repetition_table[index] == hash_key)
+      return 1;
 
   return 0;
 }
@@ -110,11 +106,11 @@ void set_sides_occupancies() {
   sides_occupancies[both] = sides_occupancies[white] | sides_occupancies[black];
 }
 
-// order: 8/7/6/5/4/3/2/1 (top to bottom) | 12345678 (left to right) /12345678
+// Parse FEN string
 void parse_fen(char *fen) {
   reset_states_and_board();
 
-  // Parse board position
+  // Piece placement
   for (int rank = 0; rank < 8; rank++) {
     for (int file = 0; file < 8;) {
       int square = RF_2SQ(rank, file);
@@ -132,46 +128,32 @@ void parse_fen(char *fen) {
     }
   }
 
-  // Skip spaces
-  while (*fen == ' ')
-    fen++;
+  while (*fen == ' ') fen++;
 
-  // Parse side to move
+  // Active color
   side_to_move = (*fen == 'w') ? white : black;
   fen++;
 
-  // Skip spaces
-  while (*fen == ' ')
-    fen++;
+  while (*fen == ' ') fen++;
 
-  // Parse castling rights
+  // Castling rights
   can_castle = 0;
   if (*fen != '-') {
     while (*fen != ' ') {
       switch (*fen++) {
-      case 'K':
-        can_castle |= WCK;
-        break;
-      case 'Q':
-        can_castle |= WCQ;
-        break;
-      case 'k':
-        can_castle |= BCK;
-        break;
-      case 'q':
-        can_castle |= BCQ;
-        break;
+      case 'K': can_castle |= WCK; break;
+      case 'Q': can_castle |= WCQ; break;
+      case 'k': can_castle |= BCK; break;
+      case 'q': can_castle |= BCQ; break;
       }
     }
   } else {
     fen++;
   }
 
-  // Skip spaces
-  while (*fen == ' ')
-    fen++;
+  while (*fen == ' ') fen++;
 
-  // Parse en passant square
+  // En passant target
   if (*fen == '-') {
     en_passant = no_square;
     fen++;
@@ -180,27 +162,16 @@ void parse_fen(char *fen) {
     fen += 2;
   }
 
-  // Skip remaining FEN components (ply and move count)
-  while (*fen && *fen != ' ')
-    fen++;
+  // Skip move counts
+  while (*fen && *fen != ' ') fen++;
 
-  // Finalize board states
   set_sides_occupancies();
   hash_key = update_hash_key();
 }
 
 
 
-/* **********************
-1111 = qkQK = 15
-wK    moved = 1111 & 1100 = 12
-h1 wR moved = 1111 & 1110 = 14
-a1 wR moved = 1111 & 1101 = 13
-
-bK    moved = 1111 & 0011 = 3
-h8 bR moved = 1111 & 1011 = 11
-a8 bR moved = 1111 & 0111 = 7
-************************* */
+// Castling rights update masks
 
 const int castling_rights[64] = {
     7,  15, 15, 15, 3,  15, 15, 11, 15, 15, 15, 15, 15, 15, 15, 15,
@@ -214,11 +185,10 @@ int is_valid_encoded_move(int move) {
     int dst = get_move_target(move);
     int pc  = get_move_piece(move);
 
-    /* simple field range checks */
     if (src < 0 || src >= 64) return 0;
     if (dst < 0 || dst >= 64) return 0;
-    if (pc  < 0 || pc  >= 12) return 0; /* piece values 0..11 */
-    if (move == 0) return 0; // hopefully fixes null move a8a8 bug
+    if (pc  < 0 || pc  >= 12) return 0;
+    if (move == 0) return 0;
     return 1;
 }
 int add_move(Moves *move_list, int move) {
@@ -235,13 +205,12 @@ int add_move(Moves *move_list, int move) {
   return 1;
 }
 
-// --- add move helpers
-char ascii_promoted_pieces[] = {[0] = '\0', // get_move_promoted_piece = '0000'
-                                            // or 'wP' ? (illegal) => print '\0'
+// Move encoding helpers
+char ascii_promoted_pieces[] = {[0] = '\0',
                                 [wQ] = 'q', [wR] = 'r', [wB] = 'b', [wN] = 'n',
                                 [bQ] = 'q', [bR] = 'r', [bB] = 'b', [bN] = 'n'};
 
-// for UCI purposes
+// UCI move output
 void print_move(int move) {
   printf("%s%s%c\n", square_to_notation[get_move_source(move)],
          square_to_notation[get_move_target(move)],
@@ -257,7 +226,7 @@ char* get_move_str(int move) {
 
 
 
-// for debugging purposes
+// Debug: print move list
 void print_move_list(Moves *move_list) {
   printf("\n");
 
@@ -298,15 +267,7 @@ void print_move_list(Moves *move_list) {
 }
 
 
-/**********************************\
- ==================================
-
-       Time controls variables
-
- ==================================
-\**********************************/
-
-// exit from engine flag
+// Time control variables
 int quit = 0;
 int movestogo = 30;
 int movetime = -1;
@@ -319,13 +280,12 @@ int timeset = 0;
 int stopped = 0;
 int nodelimit = 0;
 
-int ply;  // half-move counter
+int ply; // search depth counter
 
-int killer_moves[2][MAX_PLY]; // [side][ply]
-int history_moves[12][64]; // [piece][square]
+int killer_moves[2][MAX_PLY]; // Killer move heuristic
+int history_moves[12][64];    // History move heuristic
 
 #pragma omp threadprivate(ply, killer_moves, history_moves)
 
-// global variable for uci "ponderhit"
 int ponder_move = 0;
 int pondering = 0;

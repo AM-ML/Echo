@@ -1,43 +1,35 @@
 #include "eval.h"
 
-const int DoublePawnPenalty = -15; // will apply twice
+const int DoublePawnPenalty = -15;
 const int IsolatedPawnPenalty = -5;
 const int ConnectedPassedPawnBonus = 40;
 
-const int RookOpenFileBonus = 15; // 5 since semi-open file bonus is also added (total: 15)
+const int RookOpenFileBonus = 15;
 const int RookSemiOpenFileBonus = 10;
-const int Rook7thRankBonus = 15; // endgame bonus for rook on 7th and 2nd
-const int Rook7thRankDoubleBonus = 10; // endgame bonus for 2 rooks infiltration
+const int Rook7thRankBonus = 15;
+const int Rook7thRankDoubleBonus = 10;
 
 const int UnShieldedKingPenalty = 15;
 const int SemiShieldedKingPenalty = 10;
 
-const int KnightOutpostBonus = 25; // permanently lodged & defended knight
-const int BatteryBonus = 10; // queen + rook / rook + rook on open files (middlegame)
+const int KnightOutpostBonus = 25; // Knight defended by pawn
+const int BatteryBonus = 10;       // Queen/Rook batteries
 
 const int PawnShieldBonus = 5;
 const int ShieldedKingBonus = 5;
 const int MissingPawnShieldPenalty = -5;
-const int BatteryThreatPenalty = -20; // queen battery aimed at king
-const int PawnStormPenalty = -15; // advanced pawns infront castled king
-const int KingSideShieldedBonus = 15; // bonus for 3 front pawns defending kingside castle
-const int QueenSideShieldedBonus = 15; // bonus for 3 front pawns defending queenside castle
+const int BatteryThreatPenalty = -20;
+const int PawnStormPenalty = -15;
+const int KingSideShieldedBonus = 15;
+const int QueenSideShieldedBonus = 15;
 
-// the closer you are to promotion, the better
+// Passed pawn rank bonuses
 const int passed_pawn_bonus[8] = { 0, 5, 10, 20, 35, 60, 100, 200 };
 
+// Piece-Square Tables (including material)
+// Initialized for white, mirrored for black.
 
-// ---------------------------
-// --- PIECE SQUARE TABLES ---
-// ---------------------------
-
-// Initialized with White Pieces (indices 0-5).
-// Black pieces (indices 6-11) are initialized to 0 and filled by init_black_pst().
-
-// These values include the material score within the PST,
-// so we don't need a separate material_score array for the PST calculation logic.
-
-// Middle Game Tables
+// Middlegame PSTs
 int mg_pst[12][64] = {
     [wP] = {
           0,   0,   0,   0,   0,   0,   0,   0,
@@ -101,7 +93,7 @@ int mg_pst[12][64] = {
     }
 };
 
-// End Game Tables
+// Endgame PSTs
 int eg_pst[12][64] = {
     [wP] = {
           0,   0,   0,   0,   0,   0,   0,   0,
@@ -165,7 +157,7 @@ int eg_pst[12][64] = {
     }
 };
 
-// mirror white pst (flip horizontally & negate)
+// Mirror PST for black pieces
 void init_black_pst() {
   for (int piece = wP; piece <= wK; piece++) {
     int black_piece = piece + 6; // wP=0 -> bP=6
@@ -181,8 +173,7 @@ void init_black_pst() {
   }
 }
 
-// Material scores are now mostly embedded in PST, but base values help helper functions
-// These are PeSTO base material values
+// PeSTO material values (middlegame)
 int material_score_mg[12] = {
        90, // wP
       547, // wN
@@ -198,7 +189,7 @@ int material_score_mg[12] = {
    -16000  // bK
 };
 
-// The inflation of values makes the engine prefer material over positional advantage in the endgame
+// PeSTO material values (endgame)
 int material_score_eg[12] = {
       149, // wP
       598, // wN
@@ -214,7 +205,7 @@ int material_score_eg[12] = {
    -16000  // bK
 };
 
-// note that this adds the material score directly into the PST (i assume its faster??)
+// Embed material scores into PST
 void init_evaluation() {
   for (int piece = wP; piece <= bK; piece++) {
     for (int sq = 0; sq < 64; sq++) {
@@ -225,7 +216,7 @@ void init_evaluation() {
 }
 
 
-// Most Valuable Victim (MVV) - Least Valuable Attacker lookup table (LVA)
+// MVV/LVA table
 int mvv_lva[12][12] = {
   {105, 104, 103, 102, 101, 100, 105, 104, 103, 102, 101, 100},
   {205, 204, 203, 202, 201, 200, 205, 204, 203, 202, 201, 200},
@@ -243,8 +234,7 @@ int mvv_lva[12][12] = {
   {605, 604, 603, 602, 601, 600, 605, 604, 603, 602, 601, 600}
 };
 
-// bonus for pushing enemy king closer to the edges (for checkmating)
-// (center manhattan distance)
+// Center Manhattan Distance for mop-up
 const int cmd_score[64] = {
     200, 150, 100,  50,  50, 100, 150, 200,
     150, 100,  50,  20,  20,  50, 100, 150,
@@ -283,28 +273,18 @@ static inline int calculatePhaseFactor() {
   return (phase > 256)? 256 : phase; // 0 = endgame -> 1 = middlegame
 }
 
-// ---------------------------
-// --- EVALUATION FUNCTION ---
-// ---------------------------
+// King safety logic
 
-// - KING SAFETY LOGIC (middlegame only) - //
-
-// Precomputed weights for attackers (Queen = High threat, Knight = medium ..)
-//                            wN  wB  wR  wQ            bN  bB  bR  bQ
+// Attacker weights by piece type
 const int attackerWeight[] = { 0, 20, 20, 40, 80, 0, 0, 20, 20, 40, 80, 0 };
 
-// penalty scales up exponentially with more attackers on the king zone present
+// Attacker count penalty scale
 const int attackersPenalty[16] = {
   0, 0, 10, 30, 60, 90, 130, 170, 230, 300, 380, 470, 570, 680, 800, 930
 };
 
-
-
-// king zone to measure king safety
+// King safety zone (square + adjacent)
 static inline U64 getKingZone(int king_sq) {
-  // king distance 1 attacks + king square
-  // TODO: add distance-2 chebyshev ring (for pawn storm detection)
-  // currently it makes the engine perform worse :( ??
   return king_attacks[king_sq] | (1ULL << king_sq);
 }
 
@@ -336,10 +316,9 @@ static inline int evaluateKingSafety(int phase) {
   U64 b_pawns = bitboards[bP];
   U64 occ = sides_occupancies[both];
 
-  // WHITE KING SAFETY
+  // White king safety
   int w_attackers = 0, w_weight = 0;
 
-  // Only check attackers if black has dangerous pieces
   if (bitboards[bQ] | bitboards[bR]) {
     // Knights
     U64 bb = bitboards[bN];
@@ -396,7 +375,7 @@ static inline int evaluateKingSafety(int phase) {
     safety_score -= (w_weight + attackersPenalty[idx]);
   }
 
-  // BLACK KING SAFETY (symmetric)
+  // Black king safety
   int b_attackers = 0, b_weight = 0;
 
   if (bitboards[wQ] | bitboards[wR]) {
@@ -451,8 +430,7 @@ static inline int evaluateKingSafety(int phase) {
     safety_score += (b_weight + attackersPenalty[idx]);
   }
 
-  // PAWN SHIELD (only for castled kings)
-  // WHITE
+  // Pawn shield evaluation
   int w_is_kingside = (w_king_sq == g1);
   int w_is_queenside = (w_king_sq == c1);
 
@@ -500,10 +478,9 @@ static inline int evaluateKingSafety(int phase) {
     safety_score -= (3 - count_bits(w_pawns & storm)) * PawnStormPenalty;
   }
 
-  // --- BATTERY DETECTION ---
-  // This is the most expensive part :(
-  if (phase > 100) { // Only in middlegame since it's too expensive
-    // White threats to black king
+  // Battery detection (Queen/Rook, Queen/Bishop)
+  if (phase > 100) {
+    // White threats
     U64 w_queens = bitboards[wQ];
     if (w_queens && (bitboards[wR] | bitboards[wB])) {
       int q_sq = get_lsb_index(w_queens);
@@ -793,9 +770,7 @@ static inline int manhattan_distance(int sq1, int sq2) {
     return abs(rank2 - rank1) + abs(file2 - file1);
 }
 
-// Mop-up evaluation:
-// Encourages driving the enemy king to the edge (Center Manhattan Distance)
-// and bringing our own king closer (Manhattan Distance).
+// Mop-up evaluation for endgames
 static inline int mopUpEval(int winning_side, int losing_side) {
     int winning_king_sq = get_lsb_index(bitboards[winning_side == white ? wK : bK]);
     int losing_king_sq = get_lsb_index(bitboards[losing_side == white ? wK : bK]);
@@ -816,12 +791,13 @@ static inline int mopUpEval(int winning_side, int losing_side) {
     return score;
 }
 
+// Static evaluation function
 int eval() {
   int mg_score = 0;
   int eg_score = 0;
-  int score = 0; // For positional scores that apply generally
+  int score = 0;
 
-  // Piece-Square Tables & Material
+  // Material and PST evaluation
   int piece;
   U64 bitboard;
   int square;
@@ -927,9 +903,9 @@ int eval() {
     pop_bit(b_knights, sq);
   }
 
-  // interpolation
+  // Interpolation between middlegame and endgame
   int final_score = ((mg_score * phase) + (eg_score * (256 - phase))) / 256;
-  final_score += score; // general non-phase specific eval
+  final_score += score;
 
   // Mop Up Evaluation (for K+Q / K+R vs. K checkmates)
   if (phase < 50) { // deep into the endgame
@@ -941,8 +917,7 @@ int eval() {
   }
 
 
-  //  makes the engine prefer moves that dont lose tempo
-  //  e.g. advancing a pawn for free by attacking a queen
+  // Tempo bonus
   final_score += (side_to_move == white) ? tempo_bonus : -tempo_bonus;
   return (side_to_move == white) ? final_score : -final_score;
 }

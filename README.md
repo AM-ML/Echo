@@ -96,8 +96,37 @@ isready
 ucinewgame
 position startpos | position fen <FEN>
 go depth <N> | go movetime <ms>
+bench <depth>
 stop
 quit
+```
+
+# Benchmarks
+
+Echo includes a built-in benchmark command to measure search performance across various positions.
+
+### Running Benchmarks
+
+To run the standard benchmark suite (8 positions to depth 10):
+
+```text
+bench
+```
+
+To run benchmarks to a specific depth:
+
+```text
+bench <depth>
+```
+
+### Reference Results
+
+Standard benchmark results (Depth 10):
+
+```text
+Total Nodes: 626688
+Total Time: 2297 ms
+NPS: 272828
 ```
 
 # Reference Table

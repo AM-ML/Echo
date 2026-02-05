@@ -7,17 +7,6 @@
 #include "masks.h"
 #include "sliding_masks.h"
 
-// ---------------------------
-// --- PIECE SQUARE TABLES ---
-// ---------------------------
-
-// Initialized with White Pieces (indices 0-5).
-// Black pieces (indices 6-11) are initialized to 0 and filled by init_black_pst().
-
-// These values include the material score within the PST,
-// so we don't need a separate material_score array for the PST calculation logic.
-
-// Middle Game Tables
 extern int mg_pst[12][64];
 extern int eg_pst[12][64];
 

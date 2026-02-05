@@ -4,26 +4,19 @@
 
 /*** Pawns ***/
 
-// pawn attacks table:: [sides][squares]
 U64 pawn_attacks[2][64];
 
-// pawn attacks generator function
 U64 mask_pawn_attacks(int side, int square) {
-  U64 attacks = 0ULL; // attacks bitboard
+  U64 attacks = 0ULL;
+  U64 bitboard = 0ULL;
+  set_bit(bitboard, square);
 
-  U64 bitboard = 0ULL;       // piece bitboard
-  set_bit(bitboard, square); // set piece on bitboard
-
-  // white side
   if (!side) {
-    // if the right pawn attack square is not on A file (not possible)
     if ((bitboard >> 7) & not_A_file)
       attacks |= bitboard >> 7;
-    // if the left pawn attack square is not on H file (not possible)
     if ((bitboard >> 9) & not_H_file)
       attacks |= bitboard >> 9;
   }
-  // black side
   else {
     if ((bitboard << 7) & not_H_file)
       attacks |= bitboard << 7;
@@ -97,7 +90,7 @@ U64 mask_king_attacks(int square) {
 /**** bishop ****/
 
 U64 bishop_masks[64];
-U64 bishop_attacks[64][512]; // 512: max occupancy index for bishops
+U64 bishop_attacks[64][512];
 
 U64 mask_bishop_attacks(int square) {
   U64 attacks = 0ULL;
@@ -113,7 +106,6 @@ U64 mask_bishop_attacks(int square) {
   tr = square / 8;
   tf = square % 8;
 
-  // mask relevant bishop occupancy bits
   for (r = tr + 1, f = tf + 1; r < 7 && f < 7; r++, f++)
     attacks |= (1ULL << (RF_2SQ(r, f)));
   for (r = tr - 1, f = tf - 1; r > 0 && f > 0; r--, f--)
@@ -140,11 +132,9 @@ U64 relevant_bishop_attacks(int square, U64 block) {
   tr = square / 8;
   tf = square % 8;
 
-  // mask relevant bishop occupancy bits + board edge
   for (r = tr + 1, f = tf + 1; r <= 7 && f <= 7; r++, f++) {
-    attacks |= (1ULL << (RF_2SQ(r, f))); // add attack square
-    if ((1ULL << (RF_2SQ(r, f))) & block)
-      break; // then break, indicate piece can be captured
+    attacks |= (1ULL << (RF_2SQ(r, f)));
+    if ((1ULL << (RF_2SQ(r, f))) & block) break;
   }
 
   for (r = tr - 1, f = tf - 1; r >= 0 && f >= 0; r--, f--) {
@@ -168,9 +158,8 @@ U64 relevant_bishop_attacks(int square, U64 block) {
   return attacks;
 }
 
-/**** rook ****/
 U64 rook_masks[64];
-U64 rook_attacks[64][4096]; // 4096: max occupancy index for rooks
+U64 rook_attacks[64][4096];
 
 U64 mask_rook_attacks(int square) {
   U64 attacks = 0ULL;
@@ -250,7 +239,6 @@ U64 pawns_rank_mask[64];
 U64 isolated_pawns_mask[64];
 U64 passed_pawns_mask[2][64];
 
-// 0 0 1 _ 1 0 0 0
 static inline U64 isolated_pawn_mask(int square) {
   U64 fmask = file_mask(square);
 
@@ -262,9 +250,6 @@ static inline U64 isolated_pawn_mask(int square) {
 
 static inline U64 passed_pawn_mask(int side, int square) {
   U64 fmask = file_mask(square) | isolated_pawn_mask(square);
-
-  // since rank is inversed, 8 - rank will get it back to normal
-  // each >> 8 will shift up by 1, so >> rank * 8 will shift up to the rank
   int WhiteVerticalShifter = get_rank_index(square) * 8;
   int BlackVerticalShifter = (7 - get_rank_index(square)) * 8;
   return (side == white)? fmask >> WhiteVerticalShifter : fmask << BlackVerticalShifter;
@@ -313,7 +298,7 @@ void init_pawns_eval_masks() {
   }
 }
 
-// chebyshev distance 2 mask for king safety in the evaluation function
+// Chebyshev distance 2 mask for king safety
 U64 kingDist2_Mask[64];
 
 U64 mask_king_zone_d2(int square) {
@@ -321,12 +306,10 @@ U64 mask_king_zone_d2(int square) {
     int rank = get_rank_index(square);
     int file = get_file(square);
 
-    // Distance-2 Chebyshev includes all squares where max(|dx|, |dy|) <= 2
     for (int dr = -2; dr <= 2; dr++) {
         for (int df = -2; df <= 2; df++) {
             int r = rank + dr;
             int f = file + df;
-            // Check bounds and exclude the center square
             if (r >= 0 && r < 8 && f >= 0 && f < 8 && (dr != 0 || df != 0)) {
                 set_bit(zone, RF_2SQ(r, f));
             }

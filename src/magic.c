@@ -1,6 +1,6 @@
 #include "magic.h"
 
-/**** RELEVANT BIT COUNT LOOKUP TABLE ****/
+// Relevant bit counts for sliders
 const int relevant_bishop_count_bits[64] = {
     6, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7,
     5, 5, 5, 5, 7, 9, 9, 7, 5, 5, 5, 5, 7, 9, 9, 7, 5, 5, 5, 5, 7, 7,
@@ -85,11 +85,7 @@ U64 bishop_magic_numbers[64] = {
   2305847441654022696ULL, 144695738814432384ULL
 };
 
-/**** OCCUPANCY AND MAGIC SECTION ****/
-
-// creates attack mask and maps each occupied square to a bit
-// i.e: 1 = first occupied square from top left to bottom right
-// 2 = 2nd, 3 = 1st + 2nd, 4 = 3rd, 5 = 3rd + 1st, 6 = 3rd + 2nd + 1st etc..
+// Map index to occupancy bitmask
 U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
   U64 occupancy = 0ULL;
 
@@ -105,7 +101,7 @@ U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
   return occupancy;
 }
 
-/**** pseudo random number state ****/
+// PRNG state
 unsigned int state = 1804289383;
 
 unsigned int get_random_32() {
@@ -122,7 +118,7 @@ unsigned int get_random_32() {
 U64 get_random_64() {
   U64 n1, n2, n3, n4;
 
-  n1 = (U64)(get_random_32()) & 0XFFFF; // slice 16 bits from MS1B side
+  n1 = (U64)(get_random_32()) & 0XFFFF;
   n2 = (U64)(get_random_32()) & 0XFFFF;
   n3 = (U64)(get_random_32()) & 0XFFFF;
   n4 = (U64)(get_random_32()) & 0XFFFF;
@@ -134,26 +130,19 @@ U64 gen_magic_number() {
   return get_random_64() & get_random_64() & get_random_64() & get_random_64();
 }
 
+// Find magic number for a square
 U64 find_magic_number(int square, int relevant_bits_count, int flag) {
-  U64 occupancies[4096]; // max: 4096 bytes or 12 occupied squares for rook
-
-  U64 attacks[4096]; // max: same as occupied
-
+  U64 occupancies[4096];
+  U64 attacks[4096];
   U64 used_attacks[4096];
 
-  U64 attack_mask =
-      flag ? mask_bishop_attacks(square) : mask_rook_attacks(square);
-
+  U64 attack_mask = flag ? mask_bishop_attacks(square) : mask_rook_attacks(square);
   U64 occupancy_indicies = 1 << relevant_bits_count;
 
-  for (int index = 0; index < occupancy_indicies;
-       index++) { // loop over indicies
-    occupancies[index] = set_occupancy(index, relevant_bits_count,
-                                       attack_mask); // store each possibility
-
-    attacks[index] =
-        flag ? relevant_bishop_attacks(square, occupancies[index]) //
-             : relevant_rook_attacks(square, occupancies[index]);
+  for (int index = 0; index < occupancy_indicies; index++) {
+    occupancies[index] = set_occupancy(index, relevant_bits_count, attack_mask);
+    attacks[index] = flag ? relevant_bishop_attacks(square, occupancies[index])
+                          : relevant_rook_attacks(square, occupancies[index]);
   }
 
   for (int random_count = 0; random_count < 800000000; random_count++) {

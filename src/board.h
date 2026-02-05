@@ -25,7 +25,7 @@
 #define INFO(output, ...) (printf(#output "\n", __VA_ARGS__))
 #define out(output) (printf(#output "\n"))
 
-// FEN CONSTANTS
+// FEN constants
 #define empty_board "8/8/8/8/8/8/8/8 w - - "
 #define start_position                                                         \
   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
@@ -38,7 +38,7 @@
 #define promotion_position "8/P5r1/8/8/8/8/3nppRP/5k1K w - - 0 2"
 #define positional_position "r1b2rk1/ppp1bppp/4pn2/4P3/2B1P3/2N5/PP3PPP/R1BR2K1 b - - 0 10"
 
-// Big Endian File-Rank Mapping
+// Square mapping
 enum {
   a8, b8, c8, d8, e8, f8, g8, h8,
   a7, b7, c7, d7, e7, f7, g7, h7,
@@ -63,18 +63,16 @@ extern char ascii_pieces[];
 extern int decode_ascii_pieces[];
 
 
-// define bitboard data type
 #define U64 unsigned long long
 
-// rank and file to square
 #define RF_2SQ(r, f) ((r) * 8 + (f))
 
-extern U64 bitboards[12];        // pieces bbs
-extern U64 sides_occupancies[3]; // sides
-extern int piece_on_squares[64]; // mailbox structure: for faster move gen + make, -1 = empty
+extern U64 bitboards[12];
+extern U64 sides_occupancies[3];
+extern int piece_on_squares[64];
 
 extern int side_to_move;
-extern int can_castle; // WCK WCQ BCQ BCK
+extern int can_castle;
 extern int en_passant;
 
 #pragma omp threadprivate(bitboards, sides_occupancies, piece_on_squares, side_to_move, can_castle, en_passant)
@@ -99,7 +97,6 @@ extern const U64 rank_7;
 extern const U64 rank_8;
 
 
-// set/get/pop macros
 #define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
 #define set_bit(bitboard, square) ((bitboard) |= 1ULL << (square))
 #define pop_bit(bitboard, square)                                              \
@@ -108,12 +105,8 @@ extern const U64 rank_8;
 #define get_lsb(bitboard) ((bitboard) & -(bitboard))
 int get_lsb_index(U64 bitboard);
 
-/* ----------------------------------------- */
-/* --- rank - file - masks stuff section --- */
-/* ----------------------------------------- */
-
-#define get_file(square) ((square) % 8) // s = 8r + f --> 8r % 8 = 0, since file < 8, remainder = file
-#define get_rank(square) ((square) / 8) // sqr / 8 = rank.file, remainder of that is cutoff in an integer
+#define get_file(square) ((square) % 8)
+#define get_rank(square) ((square) / 8)
 #define get_rank_index(square) ((square) >> 3)
 #define file_mask(square) (A_file << (get_file(square)))
 #define rank_mask(square) (rank_1 >> (get_rank_index(square) * 8))
@@ -125,7 +118,6 @@ extern int repetition_index;
 
 #pragma omp threadprivate(repetition_table, repetition_index)
 
-// position repetition detection
 int is_repetition();
 
 void reset_states_and_board();
@@ -154,20 +146,7 @@ enum { allow_all_moves, allow_only_captures };
 
 
 
-/* --- 24 bits / 3 bytes ---    Encoded Move-List Item Structure
- *
- *           BINARY                                  HEXADECIMAL
-  0000 0000 0000 0000 0011 1111   source square      0x3f
-  0000 0000 0000 1111 1100 0000   target square      0xfc0
-  0000 0000 1111 0000 0000 0000   piece              0xf000
-  0000 1111 0000 0000 0000 0000   promoted piece     0xf0000
-  0001 0000 0000 0000 0000 0000   capture flag       0x100000
-  0010 0000 0000 0000 0000 0000   double push flag   0x200000
-  0100 0000 0000 0000 0000 0000   enpassant flag     0x400000
-  1000 0000 0000 0000 0000 0000   castling flag      0x800000
-*
-*/
-// --- move encoding macros ---
+// Move encoding macros
 #define encode_move(source, target, piece, promoted_piece, capture,            \
                     double_push, en_passant, castling)                         \
   (source) | ((target) << 6) | ((piece) << 12) | ((promoted_piece) << 16) |    \
@@ -186,8 +165,7 @@ enum { allow_all_moves, allow_only_captures };
 int is_valid_encoded_move(int move);
 
 typedef struct {
-  int moves[256]; // theoretical move limit: 255
-
+  int moves[256];
   int count;
 } Moves;
 
@@ -206,17 +184,9 @@ char* get_move_str(int move);
 void print_move_list(Moves *move_list);
 
 
-// order: 8/7/6/5/4/3/2/1 (top to bottom) | 12345678 (left to right) /12345678
 void parse_fen(char *fen);
 
-/**********************************\
- ==================================
-
-       Time controls variables
-
- ==================================
-\**********************************/
-
+// Time control variables
 extern int quit;
 extern int movestogo;
 extern int movetime;
@@ -233,10 +203,10 @@ extern int stopped;
 #define MATE_VALUE 49000
 #define MATE_SCORE 48000
 
-extern int ply;  // half-move counter
+extern int ply;
 
-extern int killer_moves[2][MAX_PLY]; // [side][ply]
-extern int history_moves[12][64]; // [piece][square]
+extern int killer_moves[2][MAX_PLY];
+extern int history_moves[12][64];
 
 #pragma omp threadprivate(ply, killer_moves, history_moves)
 

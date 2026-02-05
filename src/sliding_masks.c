@@ -32,15 +32,6 @@ void init_sliding_pieces(int flag) {
 }
 
 
-// get attacks from magic index
-// #define get_bishop_attacks(square, blockers) (blockers = (((blockers &
-// bishop_masks[square]) * bishop_magic_numbers[square])) >> (64 -
-// relevant_bishop_count_bits[square]))
-
-// #define get_rook_attacks(square, blockers) (blockers = (((blockers &
-// rook_masks[square]) * rook_magic_numbers[square])) >> (64 -
-// relevant_rook_count_bits[square]))
-
 U64 get_bishop_attacks(int square, U64 blockers) {
   blockers &= bishop_masks[square];
   blockers *= bishop_magic_numbers[square];
@@ -78,27 +69,18 @@ U64 get_queen_attacks(int square, U64 blockers) {
 }
 
 int is_square_attacked_by(int square, int side) {
-  // Option: Remove 'both' support if you don't explicitly use it in search to save time.
-  // If you strictly need it, keep the recursive check, but usually search uses specific sides.
   if (side == both)
       return is_square_attacked_by(square, white) || is_square_attacked_by(square, black);
 
-  // Pawn attacks (Using the lookup table directly)
-  // We check if an enemy pawn is on the attacking square relative to 'square'
   if (pawn_attacks[side ^ 1][square] & bitboards[side == white ? wP : bP]) return 1;
 
-  // Knight attacks
   if (knight_attacks[square] & bitboards[side == white ? wN : bN]) return 1;
 
-  // King attacks
   if (king_attacks[square] & bitboards[side == white ? wK : bK]) return 1;
 
-  // Bishop/Queen attacks (Linear sliding)
-  // We combine Bishop + Queen bitboards to check once
   U64 bq = bitboards[side == white ? wB : bB] | bitboards[side == white ? wQ : bQ];
   if (bq && (get_bishop_attacks(square, sides_occupancies[both]) & bq)) return 1;
 
-  // Rook/Queen attacks (Linear sliding)
   U64 rq = bitboards[side == white ? wR : bR] | bitboards[side == white ? wQ : bQ];
   if (rq && (get_rook_attacks(square, sides_occupancies[both]) & rq)) return 1;
 
