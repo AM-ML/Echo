@@ -14,26 +14,28 @@
 
 # Introduction
 
-Echo is a bitboard chess engine focused on performance and a classical alpha–beta search architecture and evaluation. Chess programming is a rabbit hole that never ends...
+Echo is a bitboard chess engine focused on performance and a classical alpha–beta search architecture and evaluation.
+
+> **Technical Deep Dive:** For a detailed breakdown of Echo's architecture, search heuristics, and evaluation function, see [**DOCUMENTATION.md**](./DOCUMENTATION.md).
 
 # Key Concepts
 
 - **Protocol:** UCI (Universal Chess Interface) compatible.
 
 ### Search
-- **Algorithm:** Negamax (MiniMax) with Alpha–Beta Pruning.
-- **Refinements:** Principal Variation Search (PVS), Iterative Deepening, Aspiration Windows.
-- **Pruning:** Null Move Pruning, Futility Pruning, Reverse Futility Pruning (Static Null Move).
-- **Heuristics:** Killer Moves, History Heuristic, Late Move Reductions (LMR).
-- **Quiescence:** Specialized search to mitigate horizon effects.
-- **Optimization:** Transposition Table with Zobrist Hashing.
-- **Multi-threading:** Parallel Search using openmp library
+- **Algorithm:** Negamax with Alpha–Beta Pruning.
+- **Refinements:** PVS, Iterative Deepening, Aspiration Windows.
+- **Pruning:** Null Move (NMP), Futility, Reverse Futility (RFP).
+- **Heuristics:** Killer Moves, History Heuristic, LMR.
+- **Quiescence:** Mitigating horizon effects with capture-only searches.
+- **Optimization:** Transposition Table (TT) with Zobrist Hashing.
+- **Multi-threading:** Parallel Search using OpenMP.
 
 ### Evaluation
-- **Material & Position:** Piece-Square Tables (PST) with middlegame/endgame interpolation.
-- **Pawn Structure:** Evaluation of passed, connected, doubled, and isolated pawns.
-- **King Safety:** Pawn shield analysis, battery detection, and Chebyshev distance-2 zone infiltration.
-- **Piece Activity:** Mobility scores, Knight outposts, Rook open files & 7th rank bonuses.
+- **Tapered Eval:** Smooth interpolation between middlegame and endgame.
+- **Pawn Structure:** Passed (connected!), isolated, and doubled pawn detection.
+- **King Safety:** Pawn shields, storm detection, and battery threats.
+- **Piece Activity:** Mobility, Knight outposts, and Rook open file bonuses.
 
 # Project Structure
 
@@ -124,12 +126,10 @@ Utility functions found in `src/helper.c` and `src/board.c`:
   * `print_bitboard()` — Visualizes specific bitmasks
   * `print_move_list()` — Lists generated moves for the current state
 
-# Credits
+# Acknowledgments
 
-Echo was built on the shoulders of these giants:
+The development of Echo was informed and inspired by several key resources in the chess programming community:
 
-  * **Maksim Korzh (Code Monkey King)**: His engine series (BBC) was foundational.
-  * **Sebastian Lague**: His chess-AI educational content and source code heavily influenced the search architecture.
-  * **BluefeverSoftware (VICE engine)**: Provided practical, production-grade patterns for UCI and search structures.
-
-A huge thanks to all three — their contributions have shaped the modern hobbyist chess-engine community.
+*   **Maksim Korzh (Code Monkey King):** Foundational concepts in bitboard representation and move generation.
+*   **Sebastian Lague:** Algorithmic clarity regarding search architecture and optimization.
+*   **BluefeverSoftware (VICE):** Architectural patterns for UCI protocol handling and search structures.
