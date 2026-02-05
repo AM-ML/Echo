@@ -65,23 +65,6 @@ Echo's evaluation function (`eval()`) is a Tapered Evaluation that interpolates 
 
 Echo is fully compatible with the UCI protocol, allowing it to be used with standard chess GUIs (e.g., Arena, CuteChess). It supports comprehensive time management, ponder mode, and analysis features.
 
-## Performance and Statistics
-
-To monitor engine performance and track the impact of optimizations, Echo includes a built-in benchmark command.
-
-### Benchmark Command
-The `bench` command executes a search on a standard set of 8 positions to a fixed depth (default 10) and reports the total nodes searched, time taken, and Nodes Per Second (NPS).
-
-**Example Output (v1.0):**
-- **Total Nodes:** ~2,000,000
-- **NPS:** ~1,500,000 (Environment dependent)
-- **Search Depth:** 10
-
-### Strength Estimates
-Echo is estimated to play at approximately 2650 Elo. Performance may vary significantly based on hardware and time controls.
-
----
-
 ### Credits
 Echo stands on the shoulders of giants in the chess programming community. Its design was informed by:
 - **Maksim Korzh (Code Monkey King):** Foundation for bitboard and move generation logic.
