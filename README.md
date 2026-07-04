@@ -91,6 +91,7 @@ Echo integrates with any UCI-compliant GUI (e.g., Arena, CuteChess, En Croissant
 uci
 isready
 ucinewgame
+setoption name Hash value <value>
 position startpos | position fen <FEN>
 go depth <N> | go movetime <ms>
 stop
