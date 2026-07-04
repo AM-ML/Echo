@@ -1,4 +1,6 @@
 #include "tt.h"
+#include <stdio.h>
+#include <string.h>
 
 U64 hash_key;
 
@@ -69,15 +71,46 @@ U64 update_hash_key() {
 // ---- TRANSPOSITION TABLE ---- //
 // ----------------------------- //
 
-size_t tt_size = TT_SIZE_BYTES / sizeof(TT_Entry); // max num entries
+int hash_size_mb = 64; // Default to 64MB
+size_t tt_size = 0; // max num entries
 int16_t age = 0; // search generation (incremented each search cycle)
-TT_Entry* TranspositionTable;
+TT_Entry* TranspositionTable = NULL;
 
-void clear_tt() { memset(TranspositionTable, 0, TT_SIZE_BYTES); }
+void clear_tt() {
+  if (TranspositionTable) {
+    memset(TranspositionTable, 0, tt_size * sizeof(TT_Entry));
+  }
+}
+
+void resize_tt(int mb) {
+  // Calculate maximum entries that fit within the requested MB
+  size_t target_size = ((size_t)mb * 1024 * 1024) / sizeof(TT_Entry);
+
+  // Find the highest power of 2 that is <= target_size
+  // This is CRITICAL because the engine indexes using & (tt_size - 1)
+  tt_size = 1;
+  while (tt_size <= target_size) {
+      tt_size *= 2;
+  }
+  tt_size /= 2;
+
+  if (tt_size == 0) tt_size = 1; // Failsafe
+
+  // Free previous table if it exists
+  if (TranspositionTable != NULL) {
+      free(TranspositionTable);
+  }
+
+  // calloc = malloc + memset to 0
+  TranspositionTable = calloc(tt_size, sizeof(TT_Entry));
+  if(!TranspositionTable) {
+      printf("ERROR! couldn't reallocate transposition table to %d MB.\n", mb);
+      exit(1);
+  }
+}
 
 void init_tt() {
-  TranspositionTable = calloc(tt_size, sizeof(TT_Entry)); // calloc = malloc + memset
-  if(!TranspositionTable) printf("ERROR! couldn't initialize transposition table.\n");
+  resize_tt(hash_size_mb);
 }
 
 // Standardized Mate Score handling
@@ -129,4 +162,3 @@ void storeTT(int score, int depth, int hashf, int move) {
     if (move != 0) tt_entry->move = move;
   }
 }
-

@@ -9,12 +9,17 @@
 #include <stdint.h>
 #include <unistd.h>
 
+/* Disabled Multithreading, still under progress
 #if !(defined(_WIN32) || defined(_WIN64))
   #include <omp.h>
 #else
   // Define dummy macros/vars for Windows single-threaded fallback
   static int omp_get_thread_num() { return 0; }
 #endif
+*/
+
+// disabling multi-threading
+static int omp_get_thread_num() { return 0; }
 
 #ifdef _WIN32
 #define FORCE_ASCII 1

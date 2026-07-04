@@ -309,6 +309,64 @@ void parse_uci_ponderhit() {
   stopped = 0;
 }
 
+void parse_option(char *command) {
+    if (strstr(command, "name Hash")) {
+        char *value_ptr = strstr(command, "value");
+        if (value_ptr) {
+            int mb = atoi(value_ptr + 6); // Read number after "value "
+
+            // Failsafes to prevent crazy memory allocations
+            if (mb < 1) mb = 1;
+            if (mb > 8192) mb = 8192; // Limit to 8GB max
+
+            hash_size_mb = mb;
+            resize_tt(hash_size_mb);
+        }
+    }
+}
+
+void print_uci_info() {
+  puts("id name echo");
+  puts("id author am-ml");
+  // Announce dynamic hash sizing support to GUI
+  puts("option name Hash type spin default 64 min 1 max 8192");
+  puts("uciok");
+}
+
+void run_bench() {
+    const char *fens[] = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+        "8/k7/3p4/p2P1p2/P2P1P2/8/8/K7 w - - 0 1",
+        "rnbq1rk1/pp2ppbp/3p1np1/2pP4/2P5/2N2NP1/PP2PPBP/R1BQK2R w KQ c6 0 7",
+        "r3k2r/2pb1ppp/2pp1q2/p7/1P2P3/P1N1P3/2P3PP/R2QKB1R w KQkq - 0 1"
+    };
+    int num_fens = 8;
+    int depth = 10;
+    U64 total_nodes = 0;
+    int start_time = get_time_ms();
+
+    for (int i = 0; i < num_fens; i++) {
+        printf("\nPosition %d/%d: %s\n", i + 1, num_fens, fens[i]);
+        parse_fen((char*)fens[i]);
+        search_position(depth);
+        total_nodes += global_nodes;
+    }
+
+    int end_time = get_time_ms();
+    int time_taken = end_time - start_time;
+    if (time_taken == 0) time_taken = 1;
+
+    printf("\n================================================\n");
+    printf("Benchmark Results:\n");
+    printf("Total Nodes: %llu\n", total_nodes);
+    printf("Total Time: %d ms\n", time_taken);
+    printf("NPS: %llu\n", (total_nodes * 1000) / (U64)time_taken);
+    printf("================================================\n");
+}
 
 void uci_loop() {
   // clear buffer
@@ -318,9 +376,7 @@ void uci_loop() {
   // define input command (user or gui) length
   char input [2000];
 
-  puts("id name echo");
-  puts("id name am-ml");
-  puts("uciok");
+  print_uci_info();
 
   while (1) {
     memset(input, 0, sizeof(input)); // clear command input
@@ -335,6 +391,12 @@ void uci_loop() {
       puts("readyok"); continue;
     }
 
+    // Catch setoption
+    if (strncmp(input, "setoption", 9) == 0) {
+      parse_option(input);
+      continue;
+    }
+
     if (strncmp(input, "position", 8) == 0) {
       parse_position(input); clear_tt();
       continue;
@@ -344,6 +406,7 @@ void uci_loop() {
       parse_uci_makemoves(input);
       continue;
     }
+
     if (strncmp(input, "ucinewgame", 10) == 0) {
       parse_position("position startpos"); clear_tt();
       continue;
@@ -351,6 +414,11 @@ void uci_loop() {
 
     if (strncmp(input, "go", 2) == 0) {
       parse_go(input); continue;
+    }
+
+    // Catch bench
+    if (strncmp(input, "bench", 5) == 0) {
+        run_bench(); continue;
     }
 
     if (strncmp(input, "eval", 4) == 0) {
@@ -362,16 +430,18 @@ void uci_loop() {
     }
 
     if (strncmp(input, "uci", 3) == 0) {
-      puts("uciok"); continue;
+      print_uci_info(); continue;
     }
 
     if (strncmp(input, "print", 5) == 0) {
       print_board(1); continue;
     }
+
     if (strncmp(input, "ponderhit", 9) == 0) {
       parse_uci_ponderhit();
       continue;
     }
+
     if (strncmp(input, "ponder", 6) == 0) {
       pondering = 1;
       timeset = 0;
