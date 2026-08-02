@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center"><b>E C H O — A Bitboard Chess Engine</b></h1>
-<p align="center"><sub>~2550 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
+<p align="center"><sub>~2317 Elo · C · UCI · Alpha–Beta · Magic Bitboards</sub></p>
 
 <p align="center">
   <img alt="language" src="https://img.shields.io/badge/language-C-blue">
